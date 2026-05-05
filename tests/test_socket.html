@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <script>
+        const TOKEN = window.localStorage.getItem("TELEWORK_TEST_TOKEN") || "REMPLACE_PAR_UN_ACCESS_TOKEN";
+
+        const socket = io("http://localhost:5000", {
+            auth: { token: TOKEN }
+        });
+
+        // Connexion
+        socket.on("connect", () => {
+            console.log("✅ Connecté !");
+
+            // Rejoindre le projet 1
+            socket.emit("join_project", { project_id: 1 });
+        });
+
+        // Recevoir les messages
+        socket.on("new_message", (data) => {
+            console.log("💬 Nouveau message :", data);
+        });
+
+        // Recevoir les notifications de tâches
+        socket.on("task_changed", (data) => {
+            console.log("📋 Tâche mise à jour :", data);
+        });
+
+        socket.on("system_message", (data) => {
+            console.log("🔔 Système :", data.message);
+        });
+
+        socket.on("error", (data) => {
+            console.log("❌ Erreur :", data.message);
+        });
+
+        // Envoyer un message (après 2 secondes)
+        setTimeout(() => {
+            socket.emit("send_message", {
+                token:      TOKEN,
+                project_id: 1,
+                content:    "Bonjour tout le monde ! 👋"
+            });
+        }, 2000);
+    </script>
+</body>
+</html>
