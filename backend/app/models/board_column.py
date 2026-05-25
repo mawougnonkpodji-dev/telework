@@ -9,7 +9,6 @@ from app.models.task import TaskStatus
 class ProjectBoardColumn(db.Model):
     """Colonne Kanban par projet. maps_to_status aligne la tâche sur le workflow existant (filtres, IA)."""
 
-    query = None
     __tablename__ = "project_board_columns"
 
     id = db.Column(db.Integer, primary_key=True)

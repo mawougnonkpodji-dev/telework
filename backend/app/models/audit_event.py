@@ -4,7 +4,6 @@ from app.extensions import db
 
 
 class AuditEvent(db.Model):
-    query = None
     __tablename__ = "audit_events"
 
     id = db.Column(db.Integer, primary_key=True)

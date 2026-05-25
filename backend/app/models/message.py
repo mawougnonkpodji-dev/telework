@@ -1,5 +1,3 @@
-from typing import Any
-
 from app.extensions import db
 from datetime import datetime, timezone
 
@@ -66,10 +64,8 @@ class Message(db.Model):
         ),
     )
 
-    def __init__(self, **kw: Any):
-        super().__init__(kw)
-        self.reactions = None
-        self.mentions = None
+    def __init__(self, **kw):
+        super().__init__(**kw)
 
     def to_dict(self):
         return {

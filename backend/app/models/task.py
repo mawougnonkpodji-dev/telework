@@ -23,7 +23,6 @@ task_assignees = db.Table(
 )
 
 class Task(db.Model):
-    query = None
     __tablename__ = "tasks"
 
     id          = db.Column(db.Integer, primary_key=True)
@@ -130,7 +129,6 @@ class TaskHistory(db.Model):
 class TaskDependency(db.Model):
     """dependent_task_id dépend de prerequisite_task_id (le prérequis doit être terminé avant)."""
 
-    query = None
     __tablename__ = "task_dependencies"
     __table_args__ = (
         db.UniqueConstraint("dependent_task_id", "prerequisite_task_id", name="uq_task_dep_pair"),

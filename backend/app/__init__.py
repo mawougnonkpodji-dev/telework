@@ -1,6 +1,7 @@
 import os
 
-from flask import Flask
+from flask import Flask, jsonify
+from sqlalchemy.exc import OperationalError, DisconnectionError
 
 from .extensions import db, migrate, jwt, socketio, cors, limiter
 from .config import config
@@ -21,7 +22,7 @@ def create_app(env="development"):
     migrate.init_app(app, db)
     jwt.init_app(app)
     cors.init_app(app, resources={r"/api/*": {"origins": "*"}})
-    socketio.init_app(app, cors_allowed_origins="*")
+    socketio.init_app(app, cors_allowed_origins="*", async_mode="eventlet")
     limiter.init_app(app)
 
     # ↓ INDISPENSABLE — importe tous les modèles ici
@@ -51,10 +52,14 @@ def create_app(env="development"):
         MobileMoneyTransactionStatus,
         Contract,
         ContractStatus,
+        Invitation,
+        InvitationStatus,
+        MemberScore,
     )
 
     # Register blueprints
     from .routes.auth import auth_bp
+    from .routes.teams import teams_bp
     from .routes.projects import projects_bp
     from .routes.tasks import tasks_bp
     from .routes.sprints import sprints_bp
@@ -68,9 +73,13 @@ def create_app(env="development"):
     from .routes.payroll import payroll_bp
     from .routes.mobile_money import mobile_money_bp
     from .routes.contracts import contracts_bp
+    from .routes.ai import ai_bp
+    from .routes.invitations import invitations_bp
+    from .routes.scoring import scoring_bp
     from .routes import task_attachments  # noqa: F401 — enregistre les routes pièces jointes
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
+    app.register_blueprint(teams_bp, url_prefix="/api/teams")
     app.register_blueprint(projects_bp, url_prefix="/api/projects")
     app.register_blueprint(board_bp, url_prefix="/api/projects")
     app.register_blueprint(tasks_bp, url_prefix="/api/tasks")
@@ -86,9 +95,29 @@ def create_app(env="development"):
     app.register_blueprint(contracts_bp, url_prefix="/api/contracts")
     app.register_blueprint(labels_bp, url_prefix="/api")
     app.register_blueprint(health_bp, url_prefix="/api/health")
-    
+    app.register_blueprint(ai_bp, url_prefix="/api/ai")
+    app.register_blueprint(invitations_bp, url_prefix="/api/invitations")
+    app.register_blueprint(scoring_bp,    url_prefix="/api/scoring")
+
     register_socket_events(socketio)
     start_scheduler(app)
     app.after_request(log_audit_event)
+
+    # ── Gestionnaire global : connexion DB perdue (coupure réseau / Supabase) ──
+    @app.errorhandler(OperationalError)
+    def handle_db_operational_error(exc):
+        db.session.rollback()
+        return jsonify({
+            "error": "Base de données temporairement inaccessible. Réessayez dans quelques secondes.",
+            "detail": str(exc.orig) if hasattr(exc, "orig") else str(exc),
+        }), 503
+
+    @app.errorhandler(DisconnectionError)
+    def handle_db_disconnection(exc):
+        db.session.rollback()
+        return jsonify({
+            "error": "Connexion à la base de données interrompue.",
+            "detail": str(exc),
+        }), 503
 
     return app

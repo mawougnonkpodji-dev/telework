@@ -1,6 +1,5 @@
 import json
-from datetime import datetime, timedelta
-from time import timezone
+from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity

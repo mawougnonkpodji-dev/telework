@@ -1,13 +1,17 @@
+import os
 from datetime import datetime
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, make_response, current_app, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from app.extensions import db
-from app.models import Contract
+from app.models import Contract, Project, User
 from app.models.contract import ContractStatus
 from app.services.audit_service import log_business_event
+from app.services.pdf_service import generate_contract_pdf
 from app.utils.project_access import can_manage_project, get_project_for_user
+
+PDF_MARKER = "PDF_CONTRACT"
 
 contracts_bp = Blueprint("contracts", __name__)
 
@@ -52,6 +56,81 @@ def list_contracts(project_id):
             "pagination": {"page": page, "per_page": per_page, "total": rows.total, "pages": rows.pages},
         }
     ), 200
+
+
+@contracts_bp.route("/mine", methods=["GET"])
+@jwt_required()
+def my_contracts():
+    """Tous les contrats dont l'utilisateur connecté est le signataire."""
+    user_id = int(get_jwt_identity())
+    rows = (
+        Contract.query
+        .filter_by(signee_user_id=user_id)
+        .order_by(Contract.created_at.desc())
+        .all()
+    )
+    # Enrich with project name
+    project_ids = {r.project_id for r in rows}
+    projects = {p.id: p.name for p in Project.query.filter(Project.id.in_(project_ids)).all()}
+
+    # Fetch signee emails for display
+    signee_ids = {r.signee_user_id for r in rows if r.signee_user_id}
+    signees = {u.id: u.email for u in User.query.filter(User.id.in_(signee_ids)).all()}
+
+    result = []
+    for r in rows:
+        d = r.to_dict()
+        d["project_name"] = projects.get(r.project_id, "—")
+        d["signee_email"]  = signees.get(r.signee_user_id, "")
+        result.append(d)
+
+    return jsonify({"contracts": result}), 200
+
+
+@contracts_bp.route("/<int:contract_id>/pdf", methods=["GET"])
+@jwt_required()
+def download_contract_pdf(contract_id):
+    """Télécharger un contrat signé en PDF (accessible au signataire et aux admins)."""
+    user_id = int(get_jwt_identity())
+    row = Contract.query.get_or_404(contract_id)
+
+    if not _can_view_contract_content(user_id, row):
+        return jsonify({"error": "Accès refusé"}), 403
+
+    safe_name = (row.title[:60].replace("/", "-")) + ".pdf"
+
+    # Contrat issu d'un upload PDF — servir le fichier stocké
+    if row.content == PDF_MARKER:
+        upload_folder = current_app.config.get("UPLOAD_FOLDER", "uploads")
+        pdf_path = os.path.join(upload_folder, "signed_contracts", f"{contract_id}.pdf")
+        if os.path.exists(pdf_path):
+            return send_file(
+                pdf_path,
+                mimetype="application/pdf",
+                as_attachment=True,
+                download_name=safe_name,
+            )
+        return jsonify({"error": "Fichier PDF introuvable sur le serveur"}), 404
+
+    # Contrat texte/JSON — générer le PDF à la volée
+    project  = Project.query.get(row.project_id)
+    creator  = User.query.get(row.created_by_id)  if row.created_by_id  else None
+    signee   = User.query.get(row.signee_user_id)  if row.signee_user_id else None
+
+    pdf_bytes = generate_contract_pdf(
+        title            = row.title,
+        contract_content = row.content,
+        employer_name    = creator.name if creator else "Administrateur",
+        employee_name    = signee.name  if signee  else "Collaborateur",
+        employee_email   = signee.email if signee  else "—",
+        project_name     = project.name if project else "—",
+        signed_at        = row.signed_at,
+    )
+
+    resp = make_response(pdf_bytes)
+    resp.headers["Content-Type"]        = "application/pdf"
+    resp.headers["Content-Disposition"] = f'attachment; filename="{safe_name}"'
+    return resp
 
 
 @contracts_bp.route("/projects/<int:project_id>", methods=["POST"])

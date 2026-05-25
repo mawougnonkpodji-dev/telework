@@ -1,0 +1,632 @@
+/* ============================================
+   TELEWORK 2.0 - Design System (revu)
+   ============================================ */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Reset & base ── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html {
+  transition: background 0.25s, color 0.25s;
+}
+
+/* ── Tokens / variables ── */
+:root {
+  --font-body:    'DM Sans', sans-serif;
+  --font-title:   'Poppins', sans-serif;
+  --border-radius-sm:  6px;
+  --border-radius-md:  10px;
+  --border-radius-lg:  14px;
+  --border-radius-xl:  20px;
+  --shadow-sm:    0 2px 8px rgba(0,0,0,0.08);
+  --shadow-md:    0 4px 12px rgba(0,0,0,0.12);
+  --shadow-lg:    0 8px 24px rgba(0,0,0,0.16);
+
+  /* Thème sombre (défaut) */
+  --c-bg:       #0f172a;
+  --c-surface:  #1e293b;
+  --c-surface2: rgba(30,41,59,.7);
+  --c-sidebar:  rgba(15,23,42,.97);
+  --c-ba85:     rgba(15,23,42,.85);
+  --c-ba7:      rgba(15,23,42,.7);
+  --c-ba5:      rgba(15,23,42,.5);
+  --c-text:     #f1f5f9;
+  --c-text2:    #e2e8f0;
+  --c-text3:    #94a3b8;
+  --c-text4:    #64748b;
+  --c-text5:    #475569;
+  --c-border:   rgba(148,163,184,.12);
+  --c-border2:  rgba(148,163,184,.2);
+  --c-border3:  rgba(148,163,184,.08);
+  --c-hover:    rgba(255,255,255,.06);
+  --c-hover2:   rgba(255,255,255,.04);
+  --c-accent:   #22d3ee;
+  --c-accent2:  #0891b2;
+
+  /* Palette principale */
+  --primary:    #4f46e5;
+  --primary-light: #818cf8;
+  --primary-dark: #3730a3;
+  --success:    #10b981;
+  --warning:    #f59e0b;
+  --danger:     #ef4444;
+  --gray-50:    #f9fafb;
+  --gray-100:   #f3f4f6;
+  --gray-200:   #e5e7eb;
+  --gray-300:   #d1d5db;
+  --gray-400:   #9ca3af;
+  --gray-500:   #6b7280;
+  --gray-600:   #4b5563;
+  --gray-700:   #374151;
+  --gray-800:   #1f2937;
+  --gray-900:   #111827;
+}
+
+/* ── Thème clair (surcharge JS) ── */
+[data-theme="light"] {
+  --c-bg:       #f1f5f9;
+  --c-surface:  #ffffff;
+  --c-surface2: rgba(255,255,255,.92);
+  --c-sidebar:  rgba(248,250,252,.98);
+  --c-ba85:     rgba(255,255,255,.97);
+  --c-ba7:      rgba(255,255,255,.92);
+  --c-ba5:      rgba(241,245,249,.8);
+  --c-text:     #0f172a;
+  --c-text2:    #1e293b;
+  --c-text3:    #334155;
+  --c-text4:    #64748b;
+  --c-text5:    #94a3b8;
+  --c-border:   rgba(15,23,42,.1);
+  --c-border2:  rgba(15,23,42,.18);
+  --c-border3:  rgba(15,23,42,.06);
+  --c-hover:    rgba(0,0,0,.05);
+  --c-hover2:   rgba(0,0,0,.03);
+  --c-accent:   #0891b2;
+  --c-accent2:  #0e7490;
+}
+
+/* ── Body & layout global ── */
+body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  background: var(--c-bg);
+  color: var(--c-text);
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.25s, color 0.25s;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* ── Loading screen ── */
+.loading-screen {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-bg);
+}
+.loader {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--gray-200);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: telework-spin 0.8s linear infinite;
+}
+@keyframes telework-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── App layout global ── */
+.app-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--c-bg);
+  transition: background 0.25s;
+}
+.app-banner {
+  height: 4px;
+  background: linear-gradient(90deg, #22d3ee, #0891b2, #4f46e5);
+}
+.main-area {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  margin-left: 68px;
+  background: var(--c-bg);
+  transition: background 0.25s, margin 0.25s;
+}
+.content-area {
+  flex: 1;
+  padding: 28px 24px;
+  overflow-y: auto;
+  background: var(--c-bg);
+  transition: background 0.25s;
+}
+
+/* ── Toolbar top (header) ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 60px;
+  background: var(--c-surface);
+  border-bottom: 1px solid var(--c-border2);
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  transition: background 0.25s, border-color 0.25s;
+}
+.toolbar-title {
+  font-family: var(--font-title);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--c-text);
+}
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: var(--border-radius-lg);
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  border: none;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.toolbar-btn:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+/* ── User Profile (droite toolbar) ── */
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 6px 6px;
+  background: var(--gray-100);
+  border: none;
+  border-radius: 9999px;
+}
+.user-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+}
+.user-name {
+  font-size: 13px;
+  color: var(--gray-700);
+  font-weight: 500;
+}
+
+/* ── Boutons telework (style “main‑made”) ── */
+.telework-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: var(--border-radius-lg);
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.telework-btn-primary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+}
+.telework-btn-primary:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79,70,229,0.2);
+}
+.telework-btn-secondary {
+  background: var(--gray-100);
+  border: 1px solid var(--gray-300);
+  color: var(--gray-700);
+}
+.telework-btn-secondary:hover {
+  background: var(--gray-200);
+  border-color: var(--gray-400);
+}
+.telework-btn-success {
+  background: var(--success);
+}
+.telework-btn-success:hover {
+  background: #0ca678;
+}
+.telework-btn-danger {
+  background: var(--danger);
+}
+.telework-btn-danger:hover {
+  background: #dc2626;
+}
+
+/* ── Formulaires ── */
+.form-group {
+  margin-bottom: 18px;
+}
+.form-label {
+  display: block;
+  font-size: 13px;
+  color: var(--gray-600);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.form-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--border-radius-md);
+  background: var(--gray-50);
+  border: 1px solid var(--gray-300);
+  color: var(--gray-900);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.form-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+}
+
+/* ── Cartes génériques ── */
+.telework-card {
+  background: #fff;
+  border-radius: var(--border-radius-lg);
+  padding: 18px;
+  border: 1px solid var(--gray-200);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s;
+}
+.telework-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.telework-card-title {
+  font-family: var(--font-title);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin-bottom: 14px;
+}
+
+/* ── Section settings / pages config ── */
+.settings-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.view-title {
+  font-family: var(--font-title);
+  font-size: clamp(20px, 4vw, 26px);
+  font-weight: 700;
+  margin-bottom: 24px;
+  color: var(--c-text);
+}
+.settings-section {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--border-radius-lg);
+  padding: 22px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-sm);
+}
+.settings-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700);
+  margin-bottom: 18px;
+}
+.settings-section-title svg {
+  color: var(--primary);
+}
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--gray-100);
+}
+.setting-info {
+  flex: 1;
+}
+.setting-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray-800);
+}
+.setting-value {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin-top: 2px;
+}
+
+/* ── Vue équipe (team) ── */
+.team-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.team-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.team-card {
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--border-radius-lg);
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s;
+}
+.team-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.team-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.team-avatar-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+}
+.team-name-lg {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+.team-role-lg {
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-top: 2px;
+}
+.view-details-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: var(--border-radius-sm);
+  background: var(--gray-50);
+  border: none;
+  color: var(--gray-600);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* ── Modale (popup) ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-content {
+  background: #fff;
+  border-radius: var(--border-radius-lg);
+  width: 90%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--gray-200);
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--gray-200);
+}
+.modal-title {
+  font-family: var(--font-title);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+.modal-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--gray-500);
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+}
+.modal-close:hover {
+  background: var(--gray-100);
+  color: var(--gray-700);
+}
+.modal-body {
+  padding: 20px 24px;
+}
+
+/* ── Panel de rapports / dashboard ── */
+.reports-container {
+  padding: 24px;
+}
+.report-card {
+  background: var(--c-surface2);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--c-border);
+  border-radius: var(--border-radius-lg);
+  padding: 20px;
+  margin-bottom: 20px;
+  transition: background 0.25s, border-color 0.25s;
+}
+.report-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--c-text2);
+  margin-bottom: 14px;
+}
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.report-stat {
+  background: var(--c-hover2);
+  border: 1px solid var(--c-border3);
+  border-radius: var(--border-radius-md);
+  padding: 14px;
+  text-align: center;
+  transition: background 0.25s, border-color 0.25s;
+}
+.report-stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--c-accent);
+  margin: 0;
+}
+.report-stat-label {
+  font-size: 11px;
+  color: var(--c-text4);
+  margin-top: 3px;
+}
+.report-chart {
+  height: 220px;
+}
+.team-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.team-member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--c-hover2);
+  border: 1px solid var(--c-border3);
+  border-radius: var(--border-radius-sm);
+  transition: background 0.25s, border-color 0.25s;
+}
+.team-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.team-info {
+  flex: 1;
+  min-width: 0;
+}
+.team-name {
+  font-size: 13px;
+  color: var(--c-text2);
+  font-weight: 500;
+}
+.team-role {
+  font-size: 11px;
+  color: var(--c-text4);
+}
+.team-progress {
+  width: 76px;
+  height: 3px;
+  background: var(--c-border2);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+.team-progress-bar {
+  height: 100%;
+  background: var(--c-accent);
+  border-radius: 9999px;
+}
+
+/* ── Responsivité personnalisée ── */
+@media (max-width: 768px) {
+  .main-area {
+    margin-left: 58px;
+  }
+  .content-area {
+    padding: 16px;
+  }
+  .team-list {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+  .report-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .settings-section {
+    padding: 18px;
+  }
+  .view-title {
+    font-size: 18px;
+    margin-bottom: 18px;
+  }
+  .modal-content {
+    max-width: 94vw;
+  }
+}
+
+/* ── Mobile très petit ── */
+@media (max-width: 480px) {
+  .toolbar {
+    height: 56px;
+  }
+  .toolbar-title {
+    font-size: 15px;
+  }
+  .telework-card, .report-card {
+    padding: 14px;
+  }
+  .team-list {
+    grid-template-columns: 1fr;
+  }
+}

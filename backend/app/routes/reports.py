@@ -8,10 +8,12 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from sqlalchemy import func, case
 
+from app.extensions import db
 from app.models import Task
 from app.models.task import task_assignees
 from app.models.sprint import Sprint
 from app.models.task import TaskStatus
+from app.models.project import project_members, MemberRole
 from app.utils.project_access import get_project_for_user
 from app.services.scoring_service import month_bounds, compute_member_scoring, finalize_scores
 
@@ -86,13 +88,24 @@ def project_dashboard(project_id):
         for r in member_rows
     }
 
+    # Fetch roles from project_members association table
+    pm_rows = db.session.execute(
+        project_members.select().where(project_members.c.project_id == project_id)
+    ).fetchall()
+    roles_by_user = {row.user_id: row.role.value for row in pm_rows}
+
     member_load = []
     for m in project.members:
         stats = load_by_user.get(m.id, {"assigned_tasks": 0, "validated_tasks": 0})
+        # Owner always counts as admin/gestionnaire
+        role = roles_by_user.get(m.id, MemberRole.member.value)
+        if m.id == project.owner_id:
+            role = MemberRole.admin.value
         member_load.append(
             {
                 "user_id": m.id,
                 "name": m.name,
+                "role": role,
                 "assigned_tasks": stats["assigned_tasks"],
                 "validated_tasks": stats["validated_tasks"],
             }

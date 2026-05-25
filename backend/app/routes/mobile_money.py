@@ -11,6 +11,7 @@ from app.extensions import db
 from app.models import MobileMoneyTransaction
 from app.models.mobile_money import MobileMoneyTransactionStatus
 from app.services.audit_service import log_business_event
+from app.services.notification_service import send_notification
 from app.utils.project_access import can_manage_project, get_project_for_user
 
 mobile_money_bp = Blueprint("mobile_money", __name__)
@@ -124,6 +125,26 @@ def create_transaction(project_id):
     tx.processed_at = datetime.utcnow()
 
     db.session.commit()
+
+    # ── Notification au bénéficiaire si paiement réussi ───────────────────────
+    if resolved == "success" and beneficiary_user_id:
+        try:
+            project_obj = get_project_for_user(user_id, project_id)
+            project_name = project_obj.name if project_obj else f"Projet #{project_id}"
+            amount_fmt = f"{float(amount_decimal):,.0f} {currency}"
+            send_notification(
+                user_id=int(beneficiary_user_id),
+                title="Paiement Mobile Money reçu",
+                content=(
+                    f"Vous avez reçu un virement de {amount_fmt} via {tx.provider} "
+                    f"pour le projet « {project_name} »."
+                ),
+                notif_type="payroll",
+                link="/settings",
+            )
+        except Exception:
+            pass  # Notification non critique, ne pas bloquer la réponse
+
     log_business_event(
         user_id=user_id,
         action="mobile_money_transaction_created",

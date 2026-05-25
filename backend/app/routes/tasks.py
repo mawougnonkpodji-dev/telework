@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
-from app.extensions import db
+from app.extensions import db, socketio
 from app.models import Task, Project
+from app.models.project import project_members as _project_members_table, MemberRole
 from app.models.board_column import ProjectBoardColumn
 from app.models.label import Label
 from app.models.task import task_assignees, TaskStatus, TaskPriority, TaskDependency
@@ -16,7 +17,12 @@ from app.services.task_service import log_history
 from app.services.notification_service import send_notification
 from app.services.task_dependency_service import dependency_would_cycle
 from app.services.attachment_service import delete_stored_file
-from app.utils.project_access import task_project_member_or_403, get_project_for_user, can_edit_project
+from app.utils.project_access import (
+    task_project_member_or_403,
+    get_project_for_user,
+    can_edit_project,
+    can_manage_project,
+)
 from datetime import datetime
 
 tasks_bp = Blueprint("tasks", __name__)
@@ -78,6 +84,27 @@ def _can_transition_status(old_status: TaskStatus, new_status: TaskStatus) -> bo
     return new_status in allowed.get(old_status, set())
 
 
+def _enforce_status_permissions(user_id: int, task, target_status: TaskStatus):
+    assignee_ids = {u.id for u in task.assignees}
+    is_assignee = user_id in assignee_ids
+    is_admin = can_manage_project(user_id, task.project_id)
+
+    if target_status in {TaskStatus.in_progress, TaskStatus.delivered} and not is_assignee:
+        return (
+            jsonify(
+                {
+                    "error": "Seul le membre assigné peut démarrer/exécuter/livrer cette tâche"
+                }
+            ),
+            403,
+        )
+
+    if target_status in {TaskStatus.validated, TaskStatus.rejected} and not is_admin:
+        return jsonify({"error": "Seul un admin peut valider ou rejeter une tâche"}), 403
+
+    return None
+
+
 def _task_light_dict(task):
     return {
         "id": task.id,
@@ -108,8 +135,8 @@ def create_task():
     project = Project.query.get_or_404(data["project_id"])
     if not get_project_for_user(user_id, project.id):
         return jsonify({"error": "Accès refusé"}), 403
-    if not can_edit_project(user_id, project.id):
-        return jsonify({"error": "Le rôle observateur ne peut pas créer de tâche"}), 403
+    if not can_manage_project(user_id, project.id):
+        return jsonify({"error": "Seul un admin peut créer une tâche"}), 403
 
     if data.get("parent_id"):
         parent = Task.query.get(data["parent_id"])
@@ -173,6 +200,12 @@ def create_task():
         )
 
     db.session.commit()
+
+    socketio.emit(
+        "task_changed",
+        {"action": "created", "task_id": task.id, "project_id": task.project_id},
+        to=f"project_{task.project_id}",
+    )
 
     return jsonify({"message": "Tâche créée", "task": task.to_dict()}), 201
 
@@ -278,6 +311,41 @@ def update_task(task_id):
 
     data = request.get_json() or {}
     old_assignees = {u.id for u in task.assignees}
+    is_admin = can_manage_project(user_id, task.project_id)
+    _new_status_for_notif = None  # set below if a status transition actually occurs
+    is_assignee = user_id in old_assignees
+
+    if not is_admin:
+        admin_only_fields = {
+            "title",
+            "priority",
+            "assignees",
+            "deadline",
+            "sprint_id",
+            "label_ids",
+            "parent_id",
+        }
+        touched_admin_only = [k for k in admin_only_fields if k in data]
+        if touched_admin_only:
+            return (
+                jsonify(
+                    {
+                        "error": "Seul un admin peut modifier titre/priorité/assignations/champs structurants",
+                        "fields": touched_admin_only,
+                    }
+                ),
+                403,
+            )
+
+        if ("description" in data or "progress" in data) and not is_assignee:
+            return (
+                jsonify(
+                    {
+                        "error": "Seul le membre assigné peut mettre à jour la description/progression",
+                    }
+                ),
+                403,
+            )
 
     if "title" in data:
         task.title = data["title"]
@@ -309,6 +377,9 @@ def update_task(task_id):
         old_status = task.status
         if not resolve_column_on_update(task.project_id, task, data):
             return jsonify({"error": "column_id invalide pour ce projet"}), 400
+        status_perm_error = _enforce_status_permissions(user_id, task, task.status)
+        if status_perm_error:
+            return status_perm_error
         if not _can_transition_status(old_status, task.status):
             return (
                 jsonify(
@@ -321,9 +392,14 @@ def update_task(task_id):
                 400,
             )
         log_history(task.id, user_id, "Colonne / statut (tableau) mis à jour")
+        if task.status != old_status:
+            _new_status_for_notif = task.status
     elif "status" in data:
         old_status = task.status
         new_status = _parse_status(data["status"])
+        status_perm_error = _enforce_status_permissions(user_id, task, new_status)
+        if status_perm_error:
+            return status_perm_error
         if not _can_transition_status(old_status, new_status):
             return (
                 jsonify(
@@ -344,6 +420,8 @@ def update_task(task_id):
             user_id,
             f"Statut changé : {old_status.value} → {task.status.value}",
         )
+        if new_status != old_status:
+            _new_status_for_notif = new_status
 
     if "label_ids" in data:
         _sync_task_labels(task, data["label_ids"])
@@ -364,12 +442,75 @@ def update_task(task_id):
             send_notification(
                 user_id=uid,
                 title="Nouvelle tâche assignée",
-                content=f"La tâche '{task.title}' vous a été assignée",
+                content=f"La tâche « {task.title} » vous a été assignée.",
                 notif_type="task_assigned",
                 link=f"/projects/{task.project_id}/tasks/{task.id}",
             )
 
+    # ── Pre-load notification data while the task object is still attached ────
+    _notif_status   = _new_status_for_notif  # may be None
+    _notif_title    = task.title
+    _notif_proj_id  = task.project_id
+    _notif_task_id  = task.id
+    _notif_assignee_ids = (
+        [u.id for u in task.assignees] if _notif_status else []
+    )
+
+    # Collect all manager IDs (owner + admin members) for task_delivered
+    _notif_manager_ids: set[int] = set()
+    if _notif_status == TaskStatus.delivered:
+        _proj = Project.query.get(_notif_proj_id)
+        if _proj and _proj.owner_id:
+            _notif_manager_ids.add(int(_proj.owner_id))
+        admin_rows = db.session.execute(
+            _project_members_table.select().where(
+                _project_members_table.c.project_id == _notif_proj_id,
+                _project_members_table.c.role == MemberRole.admin,
+            )
+        ).fetchall()
+        for _row in admin_rows:
+            _notif_manager_ids.add(int(_row.user_id))
+
     db.session.commit()
+
+    socketio.emit(
+        "task_changed",
+        {"action": "updated", "task_id": _notif_task_id, "project_id": _notif_proj_id},
+        to=f"project_{_notif_proj_id}",
+    )
+
+    # ── Post-commit status-change notifications ───────────────────────────────
+    if _notif_status == TaskStatus.validated:
+        for uid in _notif_assignee_ids:
+            if uid != user_id:
+                send_notification(
+                    user_id=uid,
+                    title="Tâche validée ✓",
+                    content=f"La tâche « {_notif_title} » a été validée.",
+                    notif_type="task_validated",
+                    link=f"/projects/{_notif_proj_id}/tasks/{_notif_task_id}",
+                )
+    elif _notif_status == TaskStatus.rejected:
+        for uid in _notif_assignee_ids:
+            if uid != user_id:
+                send_notification(
+                    user_id=uid,
+                    title="Tâche rejetée",
+                    content=f"La tâche « {_notif_title} » a été rejetée. Vérifiez les commentaires.",
+                    notif_type="task_rejected",
+                    link=f"/projects/{_notif_proj_id}/tasks/{_notif_task_id}",
+                )
+    elif _notif_status == TaskStatus.delivered:
+        for _mgr_id in _notif_manager_ids:
+            if _mgr_id != user_id:
+                send_notification(
+                    user_id=_mgr_id,
+                    title="Livraison à réviser 📦",
+                    content=f"La tâche « {_notif_title} » a été livrée et attend votre révision.",
+                    notif_type="task_delivered",
+                    link=f"/projects/{_notif_proj_id}/tasks/{_notif_task_id}",
+                )
+
     return jsonify({"message": "Tâche mise à jour", "task": task.to_dict()}), 200
 
 
@@ -387,12 +528,22 @@ def delete_task(task_id):
     if not can_edit_project(user_id, task.project_id):
         return jsonify({"error": "Le rôle observateur ne peut pas supprimer une tâche"}), 403
 
+    _del_proj_id = task.project_id
+    _del_task_id = task.id
+
     root = os.path.abspath(current_app.config["UPLOAD_FOLDER"])
     for att in list(task.attachments):
         delete_stored_file(root, att.stored_path)
 
     db.session.delete(task)
     db.session.commit()
+
+    socketio.emit(
+        "task_changed",
+        {"action": "deleted", "task_id": _del_task_id, "project_id": _del_proj_id},
+        to=f"project_{_del_proj_id}",
+    )
+
     return jsonify({"message": "Tâche supprimée"}), 200
 
 

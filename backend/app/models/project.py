@@ -23,7 +23,6 @@ project_members = db.Table(
 )
 
 class Project(db.Model):
-    query = None
     __tablename__ = "projects"
 
     id          = db.Column(db.Integer, primary_key=True)

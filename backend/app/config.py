@@ -11,6 +11,21 @@ _BACKEND_ROOT = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 class Config:
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Robustesse réseau : pré-ping + recyclage + timeout de connexion
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,        # teste la connexion avant usage → recycle les stales
+        "pool_recycle": 280,          # recycle toutes les ~4 min (< keep-alive Supabase 300 s)
+        "pool_size": 5,
+        "max_overflow": 10,
+        "pool_timeout": 20,
+        "connect_args": {
+            "connect_timeout": 10,    # abandon après 10 s si le DNS/réseau est mort
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 5,
+        },
+    }
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=int(os.getenv("JWT_ACCESS_HOURS", "1")))
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=int(os.getenv("JWT_REFRESH_DAYS", "30")))
@@ -46,6 +61,16 @@ class Config:
     PAYROLL_MONTHLY_CRON_DAY = int(os.getenv("PAYROLL_MONTHLY_CRON_DAY", "1"))
     PAYROLL_MONTHLY_CRON_HOUR = int(os.getenv("PAYROLL_MONTHLY_CRON_HOUR", "1"))
     PAYROLL_MONTHLY_CRON_MINUTE = int(os.getenv("PAYROLL_MONTHLY_CRON_MINUTE", "0"))
+
+    # ── Email (SMTP) ──────────────────────────────────────────────────────────
+    MAIL_SERVER   = os.getenv("MAIL_SERVER",   "")        # ex: smtp.gmail.com
+    MAIL_PORT     = int(os.getenv("MAIL_PORT", "587"))
+    MAIL_USERNAME = os.getenv("MAIL_USERNAME", "")        # adresse expéditeur
+    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")        # mot de passe / App Password
+    MAIL_FROM     = os.getenv("MAIL_FROM",     "")        # optionnel, défaut = MAIL_USERNAME
+
+    # URL du frontend (utilisée dans les liens d'invitation)
+    FRONTEND_URL  = os.getenv("FRONTEND_URL",  "http://localhost:5173")
 
 class DevelopmentConfig(Config):
     DEBUG = True

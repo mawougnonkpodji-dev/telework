@@ -3,7 +3,7 @@ import os
 from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
-from app.extensions import db, limiter
+from app.extensions import db, limiter, socketio
 from app.models import Project, User
 from app.models.chat_attachment import ChatAttachment
 from app.models.message import (
@@ -14,9 +14,10 @@ from app.models.message import (
     MessageReaction,
 )
 from app.utils.project_access import is_project_member
-from app.utils.project_access import can_edit_project
+from app.utils.project_access import can_edit_project, can_manage_project
 from sqlalchemy import func
 from app.services.attachment_service import save_uploaded_file_in_subdir, delete_stored_file
+from app.services.notification_service import send_notification
 
 messages_bp = Blueprint("messages", __name__)
 
@@ -57,8 +58,8 @@ def create_channel(project_id):
     project = Project.query.get_or_404(project_id)
     if not is_project_member(user_id, project):
         return jsonify({"error": "Accès refusé"}), 403
-    if not can_edit_project(user_id, project_id):
-        return jsonify({"error": "Le rôle observateur ne peut pas créer de canal"}), 403
+    if not can_manage_project(user_id, project_id):
+        return jsonify({"error": "Seul un admin peut créer un canal"}), 403
 
     data = request.get_json() or {}
     name = (data.get("name") or "").strip()
@@ -298,7 +299,68 @@ def post_project_message(project_id):
     db.session.flush()
     _create_mentions(message.id, project, mention_user_ids)
     db.session.commit()
-    return jsonify(_format_message(message)), 201
+    payload = _format_message(message)
+    socketio.emit("new_message", payload, room=f"project_{project_id}")
+    return jsonify(payload), 201
+
+
+# ─── DM — liste des conversations ─────────────────────────────────────────────
+@messages_bp.route("/dm/conversations", methods=["GET"])
+@jwt_required()
+def list_dm_conversations():
+    """Return all DM conversations for the current user, sorted by most recent
+    message, with the other participant's info and a last-message preview."""
+    from sqlalchemy import or_, desc as sa_desc
+
+    user_id = int(get_jwt_identity())
+
+    conversations = (
+        DirectConversation.query
+        .filter(
+            or_(
+                DirectConversation.user_one_id == user_id,
+                DirectConversation.user_two_id == user_id,
+            )
+        )
+        .all()
+    )
+
+    result = []
+    for conv in conversations:
+        other_id = conv.user_two_id if conv.user_one_id == user_id else conv.user_one_id
+        other_user = User.query.get(other_id)
+        if not other_user:
+            continue
+
+        last_msg = (
+            Message.query
+            .filter_by(direct_conversation_id=conv.id)
+            .order_by(Message.created_at.desc())
+            .first()
+        )
+
+        result.append({
+            "conversation_id": conv.id,
+            "other_user": {
+                "id": other_user.id,
+                "name": other_user.name,
+                "email": other_user.email,
+                "avatar": other_user.avatar,
+            },
+            "last_message": {
+                "content": last_msg.content if last_msg else None,
+                "created_at": last_msg.created_at.isoformat() if last_msg else None,
+                "sender_id": last_msg.sender_id if last_msg else None,
+            } if last_msg else None,
+        })
+
+    # Sort: conversations with messages first (most recent), then others
+    result.sort(
+        key=lambda c: c["last_message"]["created_at"] if c["last_message"] else "",
+        reverse=True,
+    )
+
+    return jsonify({"conversations": result}), 200
 
 
 # ─── DM ────────────────────────────────────────────────────────────────────────
@@ -349,8 +411,27 @@ def send_dm_message(target_user_id):
     conversation = _get_or_create_dm_conversation(user_id, target_user.id, create=True)
     message = Message(direct_conversation_id=conversation.id, sender_id=user_id, content=content)
     db.session.add(message)
+    db.session.flush()
+
+    # Read sender name while objects are still attached
+    sender = User.query.get(user_id)
+    sender_name = sender.name if sender else "Quelqu'un"
+
     db.session.commit()
-    return jsonify(_format_message(message)), 201
+
+    payload = _format_message(message)
+    socketio.emit("new_dm_message", payload, room=f"user_{target_user_id}")
+
+    # Notify recipient
+    send_notification(
+        user_id=target_user_id,
+        title=f"Message de {sender_name}",
+        content=content[:80] + ("…" if len(content) > 80 else ""),
+        notif_type="dm_received",
+        link=f"/messages/dm/{user_id}",
+    )
+
+    return jsonify(payload), 201
 
 
 # ─── RÉACTIONS ─────────────────────────────────────────────────────────────────

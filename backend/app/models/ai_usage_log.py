@@ -4,7 +4,6 @@ from app.extensions import db
 
 
 class AIUsageLog(db.Model):
-    query = None
     __tablename__ = "ai_usage_logs"
 
     id = db.Column(db.Integer, primary_key=True)

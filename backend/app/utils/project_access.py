@@ -8,6 +8,8 @@ from app.models.project import project_members, MemberRole
 def is_project_member(user_id: int, project: Project) -> bool:
     if not project:
         return False
+    if project.owner_id is not None and int(project.owner_id) == int(user_id):
+        return True
     return any(m.id == user_id for m in project.members)
 
 
@@ -30,11 +32,17 @@ def get_member_role(user_id: int, project_id: int):
 
 
 def can_edit_project(user_id: int, project_id: int) -> bool:
+    project = Project.query.get(project_id)
+    if project and project.owner_id is not None and int(project.owner_id) == int(user_id):
+        return True
     role = get_member_role(user_id, project_id)
     return role in {MemberRole.admin, MemberRole.member}
 
 
 def can_manage_project(user_id: int, project_id: int) -> bool:
+    project = Project.query.get(project_id)
+    if project and project.owner_id is not None and int(project.owner_id) == int(user_id):
+        return True
     role = get_member_role(user_id, project_id)
     return role == MemberRole.admin
 

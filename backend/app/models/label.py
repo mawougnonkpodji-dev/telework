@@ -10,7 +10,6 @@ task_labels = db.Table(
 
 
 class Label(db.Model):
-    query = None
     __tablename__ = "labels"
 
     id = db.Column(db.Integer, primary_key=True)

@@ -4,7 +4,6 @@ from app.extensions import db
 from app.models import Project, User
 from app.models.project import project_members, MemberRole
 from app.services.board_service import seed_default_board
-from app.services.board_service import seed_default_board
 
 projects_bp = Blueprint("projects", __name__)
 
@@ -42,6 +41,51 @@ def create_project():
     }), 201
 
 
+# ─── CRÉATION BATCH (wizard onboarding) ───────────────────────────────────────
+@projects_bp.route("/batch", methods=["POST"])
+@jwt_required()
+def create_projects_batch():
+    user_id = int(get_jwt_identity())
+    data = request.get_json() or {}
+    items = data.get("projects")
+    if not isinstance(items, list) or len(items) == 0:
+        return jsonify({"error": "projects doit être une liste non vide"}), 400
+
+    for item in items:
+        if not item or not item.get("name"):
+            return jsonify({"error": "Chaque projet doit avoir un nom"}), 400
+
+    created = []
+    for item in items:
+        project = Project(
+            name=item["name"],
+            description=item.get("description", ""),
+            owner_id=user_id,
+        )
+        db.session.add(project)
+        db.session.flush()
+        db.session.execute(
+            project_members.insert().values(
+                user_id=user_id,
+                project_id=project.id,
+                role=MemberRole.admin,
+            )
+        )
+        seed_default_board(project.id)
+        created.append(project.to_dict())
+
+    db.session.commit()
+    return (
+        jsonify(
+            {
+                "message": f"{len(created)} projet(s) créé(s)",
+                "projects": created,
+            }
+        ),
+        201,
+    )
+
+
 # ─── LISTER MES PROJETS ───────────────────────────────────────────────────────
 @projects_bp.route("/", methods=["GET"])
 @jwt_required()
@@ -49,7 +93,15 @@ def get_projects():
     user_id = int(get_jwt_identity())
     user    = User.query.get(user_id)
 
-    projects = [p.to_dict() for p in user.projects]
+    # Membres via project_members + projets dont l'utilisateur est owner (données legacy / seed)
+    by_id = {}
+    for p in user.projects:
+        by_id[p.id] = p
+    for p in user.owned_projects or []:
+        if p.id not in by_id:
+            by_id[p.id] = p
+
+    projects = [p.to_dict() for p in by_id.values()]
     return jsonify({"projects": projects}), 200
 
 

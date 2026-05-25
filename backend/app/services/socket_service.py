@@ -4,6 +4,7 @@ from app.extensions import db
 from app.models import User
 from app.models.message import Message, ChatChannel, DirectConversation, MessageMention
 from app.models import Project
+from app.services.notification_service import send_notification
 
 def register_socket_events(socketio):
 
@@ -21,9 +22,9 @@ def register_socket_events(socketio):
             if not user:
                 return False
             join_room(f"user_{user_id}")
-            print(f"✅ {user.name} connecté via Socket.io")
+            print(f"[socket] {user.name} connecte")
         except Exception as e:
-            print(f"❌ Connexion refusée : {e}")
+            print(f"[socket] connexion refusee: {e}")
             return False
 
 
@@ -40,7 +41,7 @@ def register_socket_events(socketio):
         emit("system_message", {
             "message": f"Vous avez rejoint le projet #{project_id}"
         })
-        print(f"👥 Utilisateur a rejoint la room {room}")
+        print(f"[socket] utilisateur a rejoint {room}")
 
 
     # ─── QUITTER UN PROJET ────────────────────────────────────────────────────
@@ -175,6 +176,15 @@ def register_socket_events(socketio):
             }
             emit("new_dm_message", payload, to=f"user_{user_id}")
             emit("new_dm_message", payload, to=f"user_{recipient_id}")
+
+            # Persist notification for the recipient
+            send_notification(
+                user_id=recipient_id,
+                title=f"Message de {sender.name}",
+                content=content[:80] + ("…" if len(content) > 80 else ""),
+                notif_type="dm_received",
+                link=f"/messages/dm/{user_id}",
+            )
         except Exception as e:
             emit("error", {"message": str(e)})
 
@@ -197,5 +207,5 @@ def register_socket_events(socketio):
 
     # ─── DÉCONNEXION ──────────────────────────────────────────────────────────
     @socketio.on("disconnect")
-    def on_disconnect():
-        print("🔌 Utilisateur déconnecté")
+    def on_disconnect(reason=None):
+        print(f"[socket] utilisateur deconnecte: {reason}")

@@ -25,7 +25,7 @@ def register():
             return jsonify({"error": f"Le champ '{field}' est requis"}), 400
 
     # Vérifier si l'email existe déjà
-    if User.query.filter_by(email=data["email"]).first():
+    if db.session.query(User).filter_by(email=data["email"]).first():
         return jsonify({"error": "Cet email est déjà utilisé"}), 409
 
     user = User(
@@ -59,7 +59,7 @@ def login():
     if not data.get("email") or not data.get("password"):
         return jsonify({"error": "Email et mot de passe requis"}), 400
 
-    user = User.query.filter_by(email=data["email"]).first()
+    user = db.session.query(User).filter_by(email=data["email"]).first()
 
     if not user or not check_password(data["password"], user.password):
         return jsonify({"error": "Email ou mot de passe incorrect"}), 401
@@ -97,7 +97,7 @@ def verify_2fa():
     if not user_id or not otp:
         return jsonify({"error": "user_id et otp sont requis"}), 400
 
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         return jsonify({"error": "Utilisateur introuvable"}), 404
 
@@ -123,7 +123,7 @@ def verify_2fa():
 @limiter.limit("10 per minute")
 def enable_2fa():
     user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         return jsonify({"error": "Utilisateur introuvable"}), 404
 
@@ -158,7 +158,7 @@ def refresh():
 @jwt_required()
 def me():
     user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
+    user = db.session.get(User, user_id)
     if not user:
         return jsonify({"error": "Utilisateur introuvable"}), 404
     return jsonify(user.to_dict()), 200

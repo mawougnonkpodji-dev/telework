@@ -10,7 +10,6 @@ class Role(enum.Enum):
     observateur = "observateur"
 
 class User(db.Model):
-    query = None
     __tablename__ = "users"
 
     __table_args__ = {'extend_existing': True}

@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 
 
 class Sprint(db.Model):
-    query = None
     __tablename__ = "sprints"
 
     __table_args__ = {'extend_existing': True}
