@@ -2,9 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Hash, Send, Users, MessageCircle, Phone, Video,
   FileText, Smile, MessageSquare, ChevronRight, Search,
+  Plus, Trash2, Pencil, Check, X, GripVertical,
 } from 'lucide-react';
 import { getApiUrl, authJsonHeaders } from '../utils/apiHelpers.js';
 import { getAuthSocket, joinProjectRoom, leaveProjectRoom } from '../utils/socket.js';
+import { deleteChannel } from '../services/backendApi.js';
 
 const EMOJI_LIST = [
   '😀','😂','😊','😍','🤔','😅','🥳','😎','🙁','😡',
@@ -14,11 +16,16 @@ const EMOJI_LIST = [
 
 const API = getApiUrl();
 
-const agendaItems = [
-  { title: 'Point Sprint',    time: '10:00 - 10:20' },
-  { title: 'Revue des bugs',  time: '10:20 - 10:40' },
-  { title: 'Planification',   time: '10:40 - 11:00' },
-];
+// Agenda stored per project in localStorage
+function loadAgenda(projectId) {
+  try {
+    const raw = localStorage.getItem(`agenda_${projectId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+function saveAgenda(projectId, items) {
+  localStorage.setItem(`agenda_${projectId}`, JSON.stringify(items));
+}
 
 /* ── small helpers ── */
 function avatar(name) {
@@ -50,16 +57,37 @@ function MeetingMascotte({ label }) {
   );
 }
 
+/* ── Rendu d'un message avec @mentions en surbrillance ── */
+function MessageContent({ content }) {
+  if (!content) return null;
+  const parts = content.split(/(@[\w][\w\s]*)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.startsWith('@') ? (
+          <span key={i} style={{ color:'#06b6d4', background:'rgba(6,182,212,0.12)', borderRadius:'4px', padding:'0 3px', fontWeight:600 }}>{part}</span>
+        ) : part
+      )}
+    </>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
-   CHANNEL PANEL (existing behavior, extracted to sub-component)
+   CHANNEL PANEL — avec @mention
 ═══════════════════════════════════════════════════════════════════════════ */
-function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveChannelId }) {
-  const [messages,  setMessages]  = useState([]);
-  const [input,     setInput]     = useState('');
-  const [showEmoji, setShowEmoji] = useState(false);
-  const [error,     setError]     = useState('');
-  const endRef    = useRef(null);
-  const inputRef  = useRef(null);
+function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveChannelId, members = [] }) {
+  const [messages,      setMessages]      = useState([]);
+  const [input,         setInput]         = useState('');
+  const [showEmoji,     setShowEmoji]     = useState(false);
+  const [error,         setError]         = useState('');
+  // @mention
+  const [mentionOpen,   setMentionOpen]   = useState(false);
+  const [mentionQuery,  setMentionQuery]  = useState('');
+  const [mentionIdx,    setMentionIdx]    = useState(0);
+  const [pendingMentions, setPendingMentions] = useState([]);
+
+  const endRef   = useRef(null);
+  const inputRef = useRef(null);
 
   const loadMessages = useCallback(async () => {
     if (!projectId) return;
@@ -96,19 +124,64 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
     };
   }, [projectId, activeChannelId]);
 
+  /* ── @mention helpers ── */
+  const mentionSuggestions = members.filter(m =>
+    Number(m.id) !== Number(user?.id) &&
+    (m.name || m.email || '').toLowerCase().includes(mentionQuery.toLowerCase())
+  ).slice(0, 6);
+
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setInput(val);
+    const sel = e.target.selectionStart ?? val.length;
+    const before = val.slice(0, sel);
+    const match = before.match(/@([\w\s]*)$/);
+    if (match) {
+      setMentionQuery(match[1]);
+      setMentionOpen(true);
+      setMentionIdx(0);
+    } else {
+      setMentionOpen(false);
+    }
+  };
+
+  const insertMention = (member) => {
+    const sel = inputRef.current?.selectionStart ?? input.length;
+    const before = input.slice(0, sel);
+    const after  = input.slice(sel);
+    const replaced = before.replace(/@([\w\s]*)$/, `@${member.name} `);
+    setInput(replaced + after);
+    setPendingMentions(prev => [...prev, { id: member.id, name: member.name }]);
+    setMentionOpen(false);
+    setMentionQuery('');
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const handleKeyDown = (e) => {
+    if (mentionOpen && mentionSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIdx(i => (i + 1) % mentionSuggestions.length); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setMentionIdx(i => (i - 1 + mentionSuggestions.length) % mentionSuggestions.length); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(mentionSuggestions[mentionIdx]); return; }
+      if (e.key === 'Escape') { setMentionOpen(false); return; }
+    }
+    if (e.key === 'Enter' && !mentionOpen) send();
+    if (e.key === 'Escape') setShowEmoji(false);
+  };
+
   const send = () => {
     const text = input.trim();
     if (!text || !projectId) return;
     const token = localStorage.getItem('auth_token');
     const s = getAuthSocket();
-    setInput(''); setError('');
+    const mentionIds = [...new Set(pendingMentions.map(m => m.id))];
+    setInput(''); setError(''); setPendingMentions([]);
     if (s?.connected && token) {
-      s.emit('send_message', { token, project_id: projectId, channel_id: activeChannelId || undefined, content: text });
+      s.emit('send_message', { token, project_id: projectId, channel_id: activeChannelId || undefined, content: text, mention_user_ids: mentionIds });
       return;
     }
     fetch(`${API}/api/messages/project/${projectId}`, {
       method: 'POST', headers: authJsonHeaders(),
-      body: JSON.stringify({ content: text, channel_id: activeChannelId || undefined }),
+      body: JSON.stringify({ content: text, channel_id: activeChannelId || undefined, mention_user_ids: mentionIds }),
     }).then(r => r.json()).then(d => {
       if (d.id) setMessages(prev => [...prev, d]);
       else setError(d.error || 'Erreur envoi');
@@ -140,7 +213,7 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
                         <span className="message-user">{name}</span>
                         <span className="message-time">{timeLabel(msg.created_at)}</span>
                       </div>
-                      <p className="message-text">{msg.content}</p>
+                      <p className="message-text"><MessageContent content={msg.content} /></p>
                     </div>
                   </div>
                 );
@@ -153,6 +226,7 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
       {error && <div style={{ padding:'0 20px 8px', fontSize:'12px', color:'#f87171' }}>{error}</div>}
 
       <div className="meeting-input-area" style={{ position:'relative' }}>
+        {/* Emoji picker */}
         {showEmoji && (
           <div style={{ position:'absolute', bottom:'72px', left:'20px', background:'rgba(2,6,23,0.98)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:'12px', padding:'10px', zIndex:200, display:'grid', gridTemplateColumns:'repeat(10,1fr)', gap:'4px', boxShadow:'0 8px 32px rgba(0,0,0,0.7)' }}>
             {EMOJI_LIST.map(e => (
@@ -165,14 +239,34 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
             ))}
           </div>
         )}
+
+        {/* @mention dropdown */}
+        {mentionOpen && mentionSuggestions.length > 0 && (
+          <div style={{ position:'absolute', bottom:'72px', left:'20px', background:'rgba(2,6,23,0.98)', border:'1px solid rgba(6,182,212,0.3)', borderRadius:'10px', padding:'6px', zIndex:300, minWidth:'180px', boxShadow:'0 8px 24px rgba(0,0,0,0.7)' }}>
+            {mentionSuggestions.map((m, i) => (
+              <button key={m.id} type="button"
+                onMouseDown={(e) => { e.preventDefault(); insertMention(m); }}
+                style={{ display:'flex', alignItems:'center', gap:'8px', width:'100%', padding:'7px 10px', borderRadius:'7px', border:'none', background: i === mentionIdx ? 'rgba(6,182,212,0.15)' : 'none', cursor:'pointer', color:'var(--c-text2)', fontSize:'13px', textAlign:'left' }}
+                onMouseEnter={() => setMentionIdx(i)}
+              >
+                <div style={{ width:'24px', height:'24px', borderRadius:'50%', background:'linear-gradient(135deg,#06b6d4,#8b5cf6)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'11px', fontWeight:'700', flexShrink:0 }}>
+                  {avatar(m.name || m.email)}
+                </div>
+                <span>{m.name || m.email}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="meeting-input-wrapper">
           <button type="button" onClick={() => setShowEmoji(v => !v)} style={{ background:'none', border:'none', cursor:'pointer', color: showEmoji ? '#06b6d4' : 'var(--c-text5)', padding:'0 4px', display:'flex', alignItems:'center' }} title="Emoji">
             <Smile size={18} />
           </button>
           <input ref={inputRef} type="text" value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') send(); if (e.key === 'Escape') setShowEmoji(false); }}
-            placeholder={`Message dans #${activeChannel?.name || 'reunion-generale'}…`}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            onBlur={() => setTimeout(() => setMentionOpen(false), 150)}
+            placeholder={`Message dans #${activeChannel?.name || 'reunion-generale'}… (@nom pour mentionner)`}
             className="meeting-input"
           />
           <button className="meeting-send-btn" onClick={send}><Send size={18} /></button>
@@ -330,10 +424,15 @@ function DMPanel({ user, target, onClose }) {
 /* ═══════════════════════════════════════════════════════════════════════════
    MAIN COMPONENT
 ═══════════════════════════════════════════════════════════════════════════ */
-export default function MeetingView({ projectId, user, members = [] }) {
+export default function MeetingView({ projectId, user, members = [], isAdmin = false, meetingTarget = null, onMeetingTargetConsumed }) {
   /* channel state */
   const [channels,       setChannels]       = useState([]);
   const [activeChannelId, setActiveChannelId] = useState(null);
+  const [deletingChanId, setDeletingChanId] = useState(null);
+  /* agenda state */
+  const [agendaItems,    setAgendaItems]    = useState([]);
+  const [agendaEditing,  setAgendaEditing]  = useState(false);
+  const [agendaDraft,    setAgendaDraft]    = useState([]);  // copy while editing
   /* sidebar mode: 'channels' | 'dm' */
   const [sidebarMode,    setSidebarMode]    = useState('channels');
   /* DM state */
@@ -342,6 +441,8 @@ export default function MeetingView({ projectId, user, members = [] }) {
   const [dmUnread,       setDmUnread]       = useState({});       // { userId: count }
   /* shared */
   const [showMembers,    setShowMembers]    = useState(false);
+  /* présence en ligne : Set d'IDs (numbers) */
+  const [onlineUsers,    setOnlineUsers]    = useState(() => new Set());
 
   const openCall = (audioOnly = false) => {
     if (!projectId) return;
@@ -350,6 +451,47 @@ export default function MeetingView({ projectId, user, members = [] }) {
       ? `https://meet.jit.si/${roomName}#config.startWithVideoMuted=true`
       : `https://meet.jit.si/${roomName}`;
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  // ── Agenda ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (projectId) setAgendaItems(loadAgenda(projectId));
+  }, [projectId]);
+
+  const startEditAgenda = () => {
+    setAgendaDraft(agendaItems.map(i => ({ ...i })));
+    setAgendaEditing(true);
+  };
+  const cancelEditAgenda = () => setAgendaEditing(false);
+  const saveAgendaEdit = () => {
+    const cleaned = agendaDraft.filter(i => i.title.trim());
+    setAgendaItems(cleaned);
+    saveAgenda(projectId, cleaned);
+    setAgendaEditing(false);
+  };
+  const addAgendaItem = () => setAgendaDraft(prev => [...prev, { title: '', time: '' }]);
+  const removeAgendaItem = (idx) => setAgendaDraft(prev => prev.filter((_, i) => i !== idx));
+  const updateAgendaItem = (idx, field, val) =>
+    setAgendaDraft(prev => prev.map((item, i) => i === idx ? { ...item, [field]: val } : item));
+
+  // ── Suppression canal ────────────────────────────────────────────────────────
+  const handleDeleteChannel = async (e, channel) => {
+    e.stopPropagation();
+    if (!window.confirm(`Supprimer le canal #${channel.name} ? Les messages seront conservés.`)) return;
+    setDeletingChanId(channel.id);
+    try {
+      await deleteChannel(projectId, channel.id);
+      setChannels(prev => {
+        const updated = prev.filter(c => c.id !== channel.id);
+        if (activeChannelId === channel.id)
+          setActiveChannelId(updated.length > 0 ? updated[0].id : null);
+        return updated;
+      });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setDeletingChanId(null);
+    }
   };
 
   const loadChannels = useCallback(async () => {
@@ -382,6 +524,45 @@ export default function MeetingView({ projectId, user, members = [] }) {
     return () => s.off('new_dm_message', onDM);
   }, [user?.id, dmTarget]);
 
+  /* ── Présence en ligne ────────────────────────────────────────────────── */
+  useEffect(() => {
+    if (!projectId) return;
+    const s = getAuthSocket();
+    if (!s) return;
+
+    // Liste initiale reçue juste après join_project
+    const onOnlineList = ({ online_user_ids }) => {
+      setOnlineUsers(new Set((online_user_ids || []).map(Number)));
+    };
+    // Un membre vient de se connecter
+    const onUserOnline = ({ user_id }) => {
+      setOnlineUsers(prev => { const next = new Set(prev); next.add(Number(user_id)); return next; });
+    };
+    // Un membre s'est déconnecté
+    const onUserOffline = ({ user_id }) => {
+      setOnlineUsers(prev => { const next = new Set(prev); next.delete(Number(user_id)); return next; });
+    };
+
+    s.on('online_in_project', onOnlineList);
+    s.on('user_online',        onUserOnline);
+    s.on('user_offline',       onUserOffline);
+
+    // Réémettre join_project APRÈS avoir attaché les listeners pour être sûr
+    // de recevoir online_in_project (App.jsx l'a peut-être déjà émis avant notre montage)
+    const requestList = () => s.emit('join_project', {
+      project_id: projectId,
+      token: localStorage.getItem('auth_token'),
+    });
+    if (s.connected) requestList();
+    else s.once('connect', requestList);
+
+    return () => {
+      s.off('online_in_project', onOnlineList);
+      s.off('user_online',        onUserOnline);
+      s.off('user_offline',       onUserOffline);
+    };
+  }, [projectId]);
+
   /* clear unread when opening a DM */
   const openDM = (member) => {
     setDmTarget(member);
@@ -392,6 +573,21 @@ export default function MeetingView({ projectId, user, members = [] }) {
     });
     setSidebarMode('dm');
   };
+
+  // ── Consommer meetingTarget (navigation depuis une notification) ─────────────
+  useEffect(() => {
+    if (!meetingTarget) return;
+    if (meetingTarget.type === 'channel') {
+      setSidebarMode('channels');
+      setDmTarget(null);
+      if (meetingTarget.id) setActiveChannelId(meetingTarget.id);
+    } else if (meetingTarget.type === 'dm') {
+      const target = members.find(m => Number(m.id) === Number(meetingTarget.id));
+      if (target) openDM(target);
+    }
+    onMeetingTargetConsumed?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetingTarget]);
 
   /* filter members for DM contact list */
   const dmContacts = members.filter(m => {
@@ -464,7 +660,9 @@ export default function MeetingView({ projectId, user, members = [] }) {
         .member-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;transition:background 0.2s}
         .member-item:hover{background:var(--c-hover)}
         .member-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#06b6d4,#8b5cf6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600;position:relative;flex-shrink:0}
-        .status-dot-small{position:absolute;bottom:0;right:0;width:8px;height:8px;border-radius:50%;border:2px solid #020617;background:#22c55e}
+        .status-dot-small{position:absolute;bottom:0;right:0;width:8px;height:8px;border-radius:50%;border:2px solid #020617}
+        .status-dot-small.online{background:#22c55e}
+        .status-dot-small.offline{background:#6b7280}
         .member-name{font-size:12px;color:var(--c-text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         @keyframes spin{to{transform:rotate(360deg)}}
       `}</style>
@@ -482,7 +680,7 @@ export default function MeetingView({ projectId, user, members = [] }) {
                 : <><MessageSquare size={13} /><span>Messages directs</span></>
             }
             <span className="dot" />
-            <span>{members.length} membres</span>
+            <span>{onlineUsers.size > 0 ? `${onlineUsers.size} en ligne` : `${members.length} membres`}</span>
           </div>
         </div>
         <div className="meeting-actions">
@@ -522,23 +720,101 @@ export default function MeetingView({ projectId, user, members = [] }) {
           {/* CHANNELS mode: agenda + channel list */}
           {sidebarMode === 'channels' && (
             <>
+              {/* ── Ordre du jour ── */}
               <div className="agenda-section">
-                <div className="agenda-title"><FileText size={13} /><span>Ordre du jour</span></div>
-                {agendaItems.map((item, i) => (
-                  <div key={i} className="agenda-item">
-                    <div className="agenda-item-title">{item.title}</div>
-                    <div className="agenda-item-time">{item.time}</div>
+                <div className="agenda-title" style={{ justifyContent: 'space-between' }}>
+                  <span style={{ display:'flex', alignItems:'center', gap:'6px' }}><FileText size={13} />Ordre du jour</span>
+                  {isAdmin && !agendaEditing && (
+                    <button onClick={startEditAgenda} title="Modifier l'ordre du jour"
+                      style={{ background:'none', border:'none', cursor:'pointer', color:'var(--c-text4)', padding:'2px', display:'flex', alignItems:'center' }}>
+                      <Pencil size={12} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Mode lecture */}
+                {!agendaEditing && (
+                  agendaItems.length === 0
+                    ? <div style={{ fontSize:'12px', color:'var(--c-text5)', fontStyle:'italic', padding:'4px 0' }}>
+                        {isAdmin ? 'Cliquez sur ✏️ pour définir l\'ordre du jour.' : 'Aucun ordre du jour défini.'}
+                      </div>
+                    : agendaItems.map((item, i) => (
+                        <div key={i} className="agenda-item">
+                          <div className="agenda-item-title">{item.title}</div>
+                          {item.time && <div className="agenda-item-time">{item.time}</div>}
+                        </div>
+                      ))
+                )}
+
+                {/* Mode édition (admin) */}
+                {agendaEditing && (
+                  <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+                    {agendaDraft.map((item, idx) => (
+                      <div key={idx} style={{ display:'flex', flexDirection:'column', gap:'4px', padding:'8px', background:'rgba(255,255,255,0.03)', borderRadius:'8px', border:'1px solid var(--c-border)' }}>
+                        <div style={{ display:'flex', gap:'4px', alignItems:'center' }}>
+                          <input
+                            value={item.title}
+                            onChange={e => updateAgendaItem(idx, 'title', e.target.value)}
+                            placeholder="Point de l'ordre du jour"
+                            style={{ flex:1, background:'var(--c-surface)', border:'1px solid var(--c-border2)', borderRadius:'6px', padding:'5px 8px', color:'var(--c-text)', fontSize:'12px', outline:'none' }}
+                          />
+                          <button onClick={() => removeAgendaItem(idx)} style={{ background:'none', border:'none', cursor:'pointer', color:'#f87171', padding:'4px', display:'flex' }}>
+                            <X size={13} />
+                          </button>
+                        </div>
+                        <input
+                          value={item.time}
+                          onChange={e => updateAgendaItem(idx, 'time', e.target.value)}
+                          placeholder="Horaire (ex: 10:00 - 10:20)"
+                          style={{ background:'var(--c-surface)', border:'1px solid var(--c-border2)', borderRadius:'6px', padding:'5px 8px', color:'var(--c-text4)', fontSize:'11px', outline:'none' }}
+                        />
+                      </div>
+                    ))}
+                    <button onClick={addAgendaItem}
+                      style={{ display:'flex', alignItems:'center', gap:'5px', padding:'6px 8px', borderRadius:'7px', border:'1px dashed rgba(6,182,212,0.4)', background:'none', color:'#06b6d4', fontSize:'12px', cursor:'pointer', justifyContent:'center' }}>
+                      <Plus size={12} /> Ajouter un point
+                    </button>
+                    <div style={{ display:'flex', gap:'6px' }}>
+                      <button onClick={saveAgendaEdit}
+                        style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', padding:'6px', borderRadius:'7px', border:'none', background:'#06b6d4', color:'#000', fontSize:'12px', fontWeight:'600', cursor:'pointer' }}>
+                        <Check size={12} /> Enregistrer
+                      </button>
+                      <button onClick={cancelEditAgenda}
+                        style={{ padding:'6px 10px', borderRadius:'7px', border:'1px solid var(--c-border2)', background:'none', color:'var(--c-text4)', fontSize:'12px', cursor:'pointer' }}>
+                        <X size={12} />
+                      </button>
+                    </div>
                   </div>
-                ))}
+                )}
               </div>
+
+              {/* ── Liste des canaux ── */}
               <div className="channels-header"><span>Canaux</span></div>
               <div className="channels-list">
                 {channels.length === 0
                   ? <div style={{ padding:'10px 12px', fontSize:'12px', color:'var(--c-text5)' }}>Aucun canal — l'admin peut en créer.</div>
                   : channels.map(c => (
-                    <button key={c.id} className={`channel-btn ${activeChannelId === c.id ? 'active' : ''}`} onClick={() => setActiveChannelId(c.id)}>
-                      <Hash size={15} /><span>{c.name}</span>
-                    </button>
+                    <div key={c.id} style={{ display:'flex', alignItems:'center', borderRadius:'6px', overflow:'hidden', background: activeChannelId === c.id ? 'rgba(6,182,212,0.15)' : 'transparent' }}>
+                      <button
+                        style={{ flex:'1 1 0', minWidth:0, display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', background:'transparent', border:'none', color: activeChannelId === c.id ? '#06b6d4' : 'var(--c-text3)', fontSize:'13px', cursor:'pointer', textAlign:'left', overflow:'hidden' }}
+                        onClick={() => setActiveChannelId(c.id)}
+                      >
+                        <Hash size={15} style={{ flexShrink:0 }} />
+                        <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.name}</span>
+                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={(e) => handleDeleteChannel(e, c)}
+                          disabled={deletingChanId === c.id}
+                          title={`Supprimer #${c.name}`}
+                          style={{ padding:'4px 7px', background:'none', border:'none', cursor: deletingChanId === c.id ? 'not-allowed' : 'pointer', color:'var(--c-text5)', flexShrink:0, display:'flex', alignItems:'center', borderRadius:'4px', opacity: deletingChanId === c.id ? 0.3 : 0.7 }}
+                          onMouseEnter={e => { if (deletingChanId !== c.id) e.currentTarget.style.color='#f87171'; }}
+                          onMouseLeave={e => e.currentTarget.style.color='var(--c-text5)'}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
                   ))}
               </div>
             </>
@@ -569,10 +845,15 @@ export default function MeetingView({ projectId, user, members = [] }) {
                     className={`dm-contact ${dmTarget?.id === m.id ? 'active' : ''}`}
                     onClick={() => openDM(m)}
                   >
-                    <div className="dm-avatar">{avatar(m.name || m.email)}</div>
+                    <div className="dm-avatar" style={{ position:'relative' }}>
+                      {avatar(m.name || m.email)}
+                      <span className={`status-dot-small ${onlineUsers.has(Number(m.id)) ? 'online' : 'offline'}`} />
+                    </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:'13px', color:'var(--c-text2)', fontWeight:'500', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.name || m.email}</div>
-                      <div style={{ fontSize:'11px', color:'var(--c-text5)' }}>{m.role || 'Membre'}</div>
+                      <div style={{ fontSize:'11px', color: onlineUsers.has(Number(m.id)) ? '#22c55e' : 'var(--c-text5)' }}>
+                        {onlineUsers.has(Number(m.id)) ? 'En ligne' : (m.role || 'Membre')}
+                      </div>
                     </div>
                     {dmUnread[m.id] > 0 && (
                       <span style={{ background:'#ef4444', color:'#fff', borderRadius:'9999px', fontSize:'10px', fontWeight:'700', padding:'1px 6px', lineHeight:'14px', flexShrink:0 }}>
@@ -595,6 +876,7 @@ export default function MeetingView({ projectId, user, members = [] }) {
               channels={channels}
               activeChannelId={activeChannelId}
               setActiveChannelId={setActiveChannelId}
+              members={members}
             />
           )}
 
@@ -620,35 +902,60 @@ export default function MeetingView({ projectId, user, members = [] }) {
         </div>
 
         {/* ── MEMBERS PANEL ── */}
-        {showMembers && (
-          <div className="members-panel">
-            <div className="members-header"><Users size={16} /><span>Membres ({members.length})</span></div>
-            <div className="members-list">
-              {members.length === 0 && <div style={{ padding:'10px 12px', fontSize:'12px', color:'var(--c-text5)' }}>Aucun membre</div>}
-              {members.map(m => (
-                <div
-                  key={m.id}
-                  className="member-item"
-                  title={Number(m.id) === Number(user?.id) ? 'Vous' : `Envoyer un DM à ${m.name || m.email}`}
-                  onClick={() => {
-                    if (Number(m.id) === Number(user?.id)) return;
-                    openDM(m); setShowMembers(false);
-                  }}
-                  style={{ cursor: Number(m.id) === Number(user?.id) ? 'default' : 'pointer' }}
-                >
-                  <div className="member-avatar">
-                    {avatar(m.name || m.email)}
-                    <span className="status-dot-small" />
-                  </div>
-                  <span className="member-name">{m.name || m.email}</span>
-                  {Number(m.id) !== Number(user?.id) && (
-                    <MessageSquare size={12} style={{ color:'var(--c-text5)', marginLeft:'auto', flexShrink:0 }} />
-                  )}
-                </div>
-              ))}
+        {showMembers && (() => {
+          const onlineList  = members.filter(m => onlineUsers.has(Number(m.id)));
+          const offlineList = members.filter(m => !onlineUsers.has(Number(m.id)));
+          const renderMember = (m) => (
+            <div
+              key={m.id}
+              className="member-item"
+              title={Number(m.id) === Number(user?.id) ? 'Vous' : `Envoyer un DM à ${m.name || m.email}`}
+              onClick={() => {
+                if (Number(m.id) === Number(user?.id)) return;
+                openDM(m); setShowMembers(false);
+              }}
+              style={{ cursor: Number(m.id) === Number(user?.id) ? 'default' : 'pointer',
+                       opacity: onlineUsers.has(Number(m.id)) ? 1 : 0.5 }}
+            >
+              <div className="member-avatar">
+                {avatar(m.name || m.email)}
+                <span className={`status-dot-small ${onlineUsers.has(Number(m.id)) ? 'online' : 'offline'}`} />
+              </div>
+              <span className="member-name">{m.name || m.email}</span>
+              {Number(m.id) !== Number(user?.id) && (
+                <MessageSquare size={12} style={{ color:'var(--c-text5)', marginLeft:'auto', flexShrink:0 }} />
+              )}
             </div>
-          </div>
-        )}
+          );
+          return (
+            <div className="members-panel">
+              <div className="members-header"><Users size={16} /><span>Membres ({members.length})</span></div>
+              <div className="members-list">
+                {members.length === 0 && <div style={{ padding:'10px 12px', fontSize:'12px', color:'var(--c-text5)' }}>Aucun membre</div>}
+
+                {/* En ligne */}
+                {onlineList.length > 0 && (
+                  <>
+                    <div style={{ padding:'6px 10px 2px', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'#22c55e', opacity:0.8 }}>
+                      En ligne — {onlineList.length}
+                    </div>
+                    {onlineList.map(renderMember)}
+                  </>
+                )}
+
+                {/* Hors ligne */}
+                {offlineList.length > 0 && (
+                  <>
+                    <div style={{ padding:'8px 10px 2px', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--c-text5)' }}>
+                      Hors ligne — {offlineList.length}
+                    </div>
+                    {offlineList.map(renderMember)}
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

@@ -237,6 +237,16 @@ export async function deleteChatAttachment(attachmentId) {
   });
 }
 
+export async function deleteChannel(projectId, channelId) {
+  const res = await fetch(url(`/api/messages/channels/${projectId}/${channelId}`), {
+    method: 'DELETE',
+    headers: authJsonHeaders(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+  return data;
+}
+
 export async function fetchProjectTasksKanban(projectId, perPage = 200) {
   const res = await fetch(
     `${url(`/api/tasks/project/${projectId}`)}?per_page=${perPage}`,
@@ -312,6 +322,96 @@ export async function fetchReportExportCsv(projectId) {
     headers: authBearerHeaders(),
   });
   return res;
+}
+
+export async function fetchReportDashboard(projectId) {
+  try {
+    const res = await fetch(url(`/api/reports/projects/${projectId}/dashboard`), {
+      headers: authBearerHeaders(),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+export async function fetchReportMonthlyScoring(projectId, month = '') {
+  try {
+    const qs = month ? `?month=${month}` : '';
+    const res = await fetch(url(`/api/reports/projects/${projectId}/scoring/monthly${qs}`), {
+      headers: authBearerHeaders(),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+export async function fetchReportExportPdf(projectId) {
+  const res = await fetch(url(`/api/reports/projects/${projectId}/export.pdf`), {
+    headers: authBearerHeaders(),
+  });
+  return res;
+}
+
+export async function fetchProjectSprints(projectId) {
+  try {
+    const res = await fetch(url(`/api/sprints/project/${projectId}`), {
+      headers: authBearerHeaders(),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.sprints || data || [];
+  } catch { return []; }
+}
+
+export async function createSprint(payload) {
+  const res = await fetch(url('/api/sprints/'), {
+    method: 'POST',
+    headers: authJsonHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+  return data;
+}
+
+export async function updateSprint(sprintId, payload) {
+  const res = await fetch(url(`/api/sprints/${sprintId}`), {
+    method: 'PUT',
+    headers: authJsonHeaders(),
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+  return data;
+}
+
+export async function deleteSprint(sprintId) {
+  const res = await fetch(url(`/api/sprints/${sprintId}`), {
+    method: 'DELETE',
+    headers: authJsonHeaders(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+  return data;
+}
+
+export async function fetchSprintDetail(sprintId) {
+  const res = await fetch(url(`/api/sprints/${sprintId}`), {
+    headers: authJsonHeaders(),
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function assignTasksToSprint(sprintId, taskIds) {
+  const res = await fetch(url(`/api/sprints/${sprintId}/tasks`), {
+    method: 'POST',
+    headers: authJsonHeaders(),
+    body: JSON.stringify({ task_ids: taskIds }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+  return data;
 }
 
 export { getApiUrl, normalizeProjectsList, authJsonHeaders, authBearerHeaders };

@@ -6,6 +6,7 @@ import KanbanBoard from './components/KanbanBoard';
 import DashboardRH from './components/DashboardRH';
 import Sidebar from './components/Sidebar';
 import ReportsPanel from './components/ReportsPanel';
+import SprintsPanel from './components/SprintsPanel';
 import TeamView from './components/TeamView';
 import SettingsView from './components/SettingsView';
 import InvitationPanel from './components/InvitationPanel';
@@ -45,6 +46,8 @@ function App() {
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  // Navigation depuis les notifications
+  const [meetingTarget, setMeetingTarget] = useState(null); // { type:'channel'|'dm', id:number|string }
   const mountedRef = useRef(true);
   const initialViewBootstrapped = useRef(false);
 
@@ -95,6 +98,73 @@ function App() {
     window.addEventListener('projectChanged', handleProjectChanged);
     return () => window.removeEventListener('projectChanged', handleProjectChanged);
   }, [token]);
+
+  // ── Navigation depuis les notifications ───────────────────────────────────
+  useEffect(() => {
+    const handleNavigateTo = (e) => {
+      const link = e.detail;
+      if (!link || typeof link !== 'string') return;
+
+      // Format 1 : project/{id}/meeting/channel/{channelId}
+      const chanMatch = link.match(/^project\/(\d+)\/meeting\/channel\/(\d*)$/);
+      if (chanMatch) {
+        const pid = parseInt(chanMatch[1]);
+        const cid = chanMatch[2] ? parseInt(chanMatch[2]) : null;
+        const p = projects.find((pr) => pr.id === pid);
+        if (p) {
+          setActiveProject(p);
+          setActiveProjectId(p.id);
+          localStorage.setItem('last_project_id', String(p.id));
+          window.dispatchEvent(new CustomEvent('projectChanged', { detail: p }));
+        }
+        setMeetingTarget({ type: 'channel', id: cid });
+        setCurrentView('meeting');
+        return;
+      }
+
+      // Format 2 : project/{id}/meeting/dm/{userId}
+      const dmProjMatch = link.match(/^project\/(\d+)\/meeting\/dm\/(\d+)$/);
+      if (dmProjMatch) {
+        const pid = parseInt(dmProjMatch[1]);
+        const uid = parseInt(dmProjMatch[2]);
+        const p = projects.find((pr) => pr.id === pid);
+        if (p) {
+          setActiveProject(p);
+          setActiveProjectId(p.id);
+          localStorage.setItem('last_project_id', String(p.id));
+          window.dispatchEvent(new CustomEvent('projectChanged', { detail: p }));
+        }
+        setMeetingTarget({ type: 'dm', id: uid });
+        setCurrentView('meeting');
+        return;
+      }
+
+      // Format 3 : dm/{userId} — DM sans contexte projet, ouvre réunion courante
+      const dmMatch = link.match(/^dm\/(\d+)$/);
+      if (dmMatch) {
+        setMeetingTarget({ type: 'dm', id: parseInt(dmMatch[1]) });
+        setCurrentView('meeting');
+        return;
+      }
+
+      // Format 4 : project/{id}/workspace
+      const wsMatch = link.match(/^project\/(\d+)\/workspace$/);
+      if (wsMatch) {
+        const pid = parseInt(wsMatch[1]);
+        const p = projects.find((pr) => pr.id === pid);
+        if (p) {
+          setActiveProject(p);
+          setActiveProjectId(p.id);
+          localStorage.setItem('last_project_id', String(p.id));
+          window.dispatchEvent(new CustomEvent('projectChanged', { detail: p }));
+        }
+        setCurrentView('workspace');
+      }
+    };
+
+    window.addEventListener('navigateTo', handleNavigateTo);
+    return () => window.removeEventListener('navigateTo', handleNavigateTo);
+  }, [projects]);
 
   useEffect(() => {
     // 30 s interval — 5 s was triggering the rate-limiter (200 req/h cap)
@@ -714,6 +784,10 @@ function App() {
           <ReportsPanel projectId={activeProject?.id} />
         )}
 
+        {currentView === 'sprints' && isProjectAdmin && (
+          <SprintsPanel projectId={activeProject?.id} isAdmin={isProjectAdmin} />
+        )}
+
         {currentView === 'invitations' && isProjectAdmin && (
           <div style={{ padding: '24px' }}>
             <div style={{
@@ -747,6 +821,9 @@ function App() {
               projectId={activeProject?.id}
               user={user}
               members={teamMembers}
+              isAdmin={isProjectAdmin}
+              meetingTarget={meetingTarget}
+              onMeetingTargetConsumed={() => setMeetingTarget(null)}
             />
           </div>
         )}

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import (
     create_access_token,
@@ -7,7 +8,20 @@ from flask_jwt_extended import (
 )
 from app.extensions import db, limiter
 from app.models import User
+from app.models.user_login_log import UserLoginLog
 from app.services.auth_service import hash_password, check_password, generate_otp_secret, verify_otp
+
+
+def _record_login(user_id: int):
+    """Insère une ligne dans user_login_logs avec l'heure UTC actuelle."""
+    try:
+        db.session.add(UserLoginLog(
+            user_id=user_id,
+            logged_in_at=datetime.now(timezone.utc),
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()  # ne jamais bloquer le login pour ça
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -74,6 +88,7 @@ def login():
 
     access_token  = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))
+    _record_login(user.id)
 
     return jsonify({
         "message": "Connexion réussie",
@@ -106,6 +121,7 @@ def verify_2fa():
 
     access_token  = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))
+    _record_login(user.id)
 
     return jsonify({
         "message": "Authentification 2FA réussie",
@@ -162,3 +178,30 @@ def me():
     if not user:
         return jsonify({"error": "Utilisateur introuvable"}), 404
     return jsonify(user.to_dict()), 200
+
+
+# ─── UPDATE PROFIL ────────────────────────────────────────────────────────────
+@auth_bp.route("/me", methods=["PATCH"])
+@jwt_required()
+def update_me():
+    """Met à jour le nom et/ou l'avatar de l'utilisateur connecté."""
+    user_id = int(get_jwt_identity())
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": "Utilisateur introuvable"}), 404
+
+    data = request.get_json() or {}
+
+    if "name" in data:
+        name = data["name"].strip()
+        if not name:
+            return jsonify({"error": "Le nom ne peut pas être vide"}), 400
+        user.name = name
+
+    if "avatar" in data:
+        avatar_val = (data["avatar"] or "").strip()
+        # Accepter URL http(s) ou data URI base64 ou vide (suppression)
+        user.avatar = avatar_val or None
+
+    db.session.commit()
+    return jsonify({"message": "Profil mis à jour", "user": user.to_dict()}), 200

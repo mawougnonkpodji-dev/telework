@@ -164,7 +164,7 @@ export function adaptReportsDashboardPayload(apiJson) {
       role: ROLE_LABELS[m.role] || m.role || 'Membre',
       xp: (m.validated_tasks || 0) * 10,
       activeTasks: m.assigned_tasks || 0,
-      status: 'online',
+      // status is managed in real-time via socket (not hardcoded here)
     })),
     statusDistribution: {
       todo: s.assigned_tasks ?? 0,

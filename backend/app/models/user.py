@@ -18,7 +18,7 @@ class User(db.Model):
     name       = db.Column(db.String(100), nullable=False)
     email      = db.Column(db.String(150), unique=True, nullable=False)
     password   = db.Column(db.String(255), nullable=False)
-    avatar     = db.Column(db.String(255))
+    avatar     = db.Column(db.Text)
     role       = db.Column(Enum(Role), default=Role.member)
     points     = db.Column(db.Integer, default=0)
     otp_secret = db.Column(db.String(32))

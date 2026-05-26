@@ -85,7 +85,7 @@ export default function TeamView({ projectId, projectTasks }) {
                 <div className="team-avatar-lg">{memberName.charAt(0)}</div>
                 <div className="team-card-info">
                   <h3 className="team-name-lg">{memberName}</h3>
-                  <p className="team-role-lg">{member.role || 'member'}</p>
+                  <p className="team-role-lg">{member.role || 'Membre'}</p>
                 </div>
               </div>
 
@@ -109,8 +109,7 @@ export default function TeamView({ projectId, projectTasks }) {
               </div>
 
               <button type="button" className="view-details-btn">
-                Voir détails
-                <ChevronRight size={16} />
+                Voir les détails <ChevronRight size={15} />
               </button>
             </div>
           );

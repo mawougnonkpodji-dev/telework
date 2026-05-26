@@ -22,3 +22,4 @@ from .mobile_money import MobileMoneyTransaction, MobileMoneyTransactionStatus
 from .contract import Contract, ContractStatus
 from .invitation import Invitation, InvitationStatus
 from .member_score import MemberScore
+from .user_login_log import UserLoginLog

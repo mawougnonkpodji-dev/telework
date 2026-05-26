@@ -2,6 +2,16 @@
 Entraîne un modèle de régression linéaire sur 500 profils synthétiques,
 puis le sérialise en scoring_model.pkl (dossier backend/).
 
+Variables :
+  x1  ponctualité de connexion       15 %
+      = % jours où la 1ère connexion est <= 09:00 heure locale
+      (journée de 8h : 09h00 – 17h00)
+  x2  taux d'achèvement              25 %
+  x3  taux de rejet (pénalité)       25 %
+  x4  fréquence d'interaction        10 %
+  x5  qualité des interactions       10 %
+  x6  participation aux révisions    15 %
+
 Usage :
     python -m app.services.ai_scoring_trainer
     # ou directement :

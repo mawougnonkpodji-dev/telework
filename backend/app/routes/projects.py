@@ -26,12 +26,22 @@ def create_project():
     db.session.add(project)
     db.session.flush()  # pour obtenir project.id avant commit
 
-    # Ajouter le créateur comme membre admin
-    db.session.execute(project_members.insert().values(
-        user_id    = user_id,
-        project_id = project.id,
-        role       = MemberRole.admin
-    ))
+    # Ajouter le créateur comme membre admin (upsert pour éviter les doublons)
+    existing = db.session.execute(project_members.select().where(
+        project_members.c.user_id    == user_id,
+        project_members.c.project_id == project.id,
+    )).fetchone()
+    if existing:
+        db.session.execute(project_members.update().where(
+            project_members.c.user_id    == user_id,
+            project_members.c.project_id == project.id,
+        ).values(role=MemberRole.admin))
+    else:
+        db.session.execute(project_members.insert().values(
+            user_id    = user_id,
+            project_id = project.id,
+            role       = MemberRole.admin,
+        ))
     seed_default_board(project.id)
     db.session.commit()
 
@@ -140,6 +150,46 @@ def update_project(project_id):
     return jsonify({"message": "Projet mis à jour", "project": project.to_dict()}), 200
 
 
+# ─── RÉPARER LES RÔLES OWNERS ────────────────────────────────────────────────
+@projects_bp.route("/fix-owner-roles", methods=["POST"])
+@jwt_required()
+def fix_owner_roles():
+    """
+    S'assure que chaque owner de projet est dans project_members avec role=admin.
+    À appeler une fois pour corriger les projets existants en base.
+    """
+    user_id = int(get_jwt_identity())
+    from app.models import User
+    caller = db.session.get(User, user_id)
+    if not caller or caller.role != 'admin':
+        return jsonify({"error": "Réservé aux administrateurs plateforme"}), 403
+
+    projects = Project.query.filter(Project.owner_id.isnot(None)).all()
+    fixed = 0
+    for project in projects:
+        existing = db.session.execute(project_members.select().where(
+            project_members.c.user_id    == project.owner_id,
+            project_members.c.project_id == project.id,
+        )).fetchone()
+        if existing:
+            if existing.role != MemberRole.admin:
+                db.session.execute(project_members.update().where(
+                    project_members.c.user_id    == project.owner_id,
+                    project_members.c.project_id == project.id,
+                ).values(role=MemberRole.admin))
+                fixed += 1
+        else:
+            db.session.execute(project_members.insert().values(
+                user_id    = project.owner_id,
+                project_id = project.id,
+                role       = MemberRole.admin,
+            ))
+            fixed += 1
+
+    db.session.commit()
+    return jsonify({"message": f"{fixed} projet(s) corrigé(s).", "total": len(projects)}), 200
+
+
 # ─── SUPPRIMER UN PROJET ──────────────────────────────────────────────────────
 @projects_bp.route("/<int:project_id>", methods=["DELETE"])
 @jwt_required()
@@ -215,6 +265,9 @@ def remove_member(project_id, member_id):
 
 # ─── HELPERS INTERNES ─────────────────────────────────────────────────────────
 def _is_member(user_id, project):
+    # Le propriétaire est toujours considéré comme membre même sans entrée project_members
+    if project.owner_id == user_id:
+        return True
     return any(m.id == user_id for m in project.members)
 
 def _is_admin(user_id, project):
@@ -231,10 +284,34 @@ def _get_members(project):
         project_members.select().where(project_members.c.project_id == project.id)
     ).fetchall()
     roles_by_user = {row.user_id: row.role.value for row in rows}
-    return [{
-        "id":     m.id,
-        "name":   m.name,
-        "email":  m.email,
-        "avatar": m.avatar,
-        "role": roles_by_user.get(m.id, MemberRole.member.value),
-    } for m in project.members]
+
+    members = []
+    owner_included = False
+
+    for m in project.members:
+        # Le propriétaire est toujours admin, peu importe ce qui est en base
+        role = MemberRole.admin.value if m.id == project.owner_id else roles_by_user.get(m.id, MemberRole.member.value)
+        if m.id == project.owner_id:
+            owner_included = True
+        members.append({
+            "id":     m.id,
+            "name":   m.name,
+            "email":  m.email,
+            "avatar": m.avatar,
+            "role":   role,
+        })
+
+    # Si le propriétaire n'est pas dans project_members (projets legacy), l'ajouter quand même
+    if not owner_included and project.owner_id:
+        from app.models import User
+        owner = db.session.get(User, project.owner_id)
+        if owner:
+            members.insert(0, {
+                "id":     owner.id,
+                "name":   owner.name,
+                "email":  owner.email,
+                "avatar": owner.avatar,
+                "role":   MemberRole.admin.value,
+            })
+
+    return members

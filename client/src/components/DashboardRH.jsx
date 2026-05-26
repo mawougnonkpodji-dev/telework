@@ -43,6 +43,37 @@ export default function DashboardRH() {
   const payMemberRef = React.useRef(null);
   React.useEffect(() => { payMemberRef.current = payMember; }, [payMember]);
 
+  // ── Présence en ligne (socket) ───────────────────────────────────────────────
+  const [onlineUsers, setOnlineUsers] = React.useState(() => new Set());
+
+  React.useEffect(() => {
+    if (!selectedProjectId) return;
+    const s = getAuthSocket();
+    if (!s) return;
+    const onOnlineList = ({ online_user_ids }) =>
+      setOnlineUsers(new Set((online_user_ids || []).map(Number)));
+    const onUserOnline = ({ user_id }) =>
+      setOnlineUsers(prev => { const n = new Set(prev); n.add(Number(user_id)); return n; });
+    const onUserOffline = ({ user_id }) =>
+      setOnlineUsers(prev => { const n = new Set(prev); n.delete(Number(user_id)); return n; });
+    s.on('online_in_project', onOnlineList);
+    s.on('user_online',       onUserOnline);
+    s.on('user_offline',      onUserOffline);
+    // Réémettre join_project APRÈS avoir attaché les listeners pour être sûr
+    // de recevoir online_in_project (App.jsx l'a peut-être déjà émis avant notre montage)
+    const requestList = () => s.emit('join_project', {
+      project_id: selectedProjectId,
+      token: localStorage.getItem('auth_token'),
+    });
+    if (s.connected) requestList();
+    else s.once('connect', requestList);
+    return () => {
+      s.off('online_in_project', onOnlineList);
+      s.off('user_online',       onUserOnline);
+      s.off('user_offline',      onUserOffline);
+    };
+  }, [selectedProjectId]);
+
   // ── AI Scoring ───────────────────────────────────────────────────────────────
   const [aiScores,       setAiScores]       = React.useState([]);
   const [aiLoading,      setAiLoading]      = React.useState(false);
@@ -673,9 +704,14 @@ export default function DashboardRH() {
                           </div>
                         </td>
                         <td style={{ padding: '16px', textAlign: 'center' }}>
-                          <span style={{ padding: '8px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '500', backgroundColor: member.status === 'online' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)', color: member.status === 'online' ? '#34d399' : '#fbbf24' }}>
-                            {member.status === 'online' ? 'En ligne' : 'Occupé'}
-                          </span>
+                          {(() => {
+                            const isOnline = onlineUsers.has(Number(member.userId));
+                            return (
+                              <span style={{ padding: '8px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '500', backgroundColor: isOnline ? 'rgba(16, 185, 129, 0.2)' : 'rgba(100, 116, 139, 0.2)', color: isOnline ? '#34d399' : '#94a3b8' }}>
+                                {isOnline ? 'En ligne' : 'Hors ligne'}
+                              </span>
+                            );
+                          })()}
                         </td>
                         {canManagePayroll && (
                           <td style={{ padding: '16px', textAlign: 'center' }}>

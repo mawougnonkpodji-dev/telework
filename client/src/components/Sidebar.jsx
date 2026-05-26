@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, Briefcase, ChevronLeft, ChevronRight, Settings, LogOut, Users, BarChart3, Lock, UserPlus, Folder, Network, Video } from 'lucide-react';
+import { LayoutDashboard, Briefcase, ChevronLeft, ChevronRight, Settings, LogOut, Users, BarChart3, Lock, UserPlus, Folder, Network, Video, Zap } from 'lucide-react';
 import { getApiUrl, normalizeProjectsList, normalizeCreatedProject } from '../utils/apiHelpers.js';
 
 const API_URL = getApiUrl();
@@ -260,6 +260,17 @@ export default function Sidebar({ currentView, onViewChange, user, collapsed, on
             onClick={() => onViewChange('reports')}
             collapsed={collapsed}
             color="#8b5cf6"
+          />
+        )}
+
+        {isProjectAdmin && (
+          <SidebarItem
+            icon={<Zap size={18} />}
+            label="Sprints"
+            active={currentView === 'sprints'}
+            onClick={() => onViewChange('sprints')}
+            collapsed={collapsed}
+            color="#06b6d4"
           />
         )}
 

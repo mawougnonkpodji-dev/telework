@@ -76,6 +76,28 @@ def create_channel(project_id):
     return jsonify(_format_channel(channel)), 201
 
 
+# ─── SUPPRIMER UN CANAL ────────────────────────────────────────────────────────
+@messages_bp.route("/channels/<int:project_id>/<int:channel_id>", methods=["DELETE"])
+@jwt_required()
+def delete_channel(project_id, channel_id):
+    user_id = int(get_jwt_identity())
+    project = Project.query.get_or_404(project_id)
+    if not is_project_member(user_id, project):
+        return jsonify({"error": "Accès refusé"}), 403
+    if not can_manage_project(user_id, project_id):
+        return jsonify({"error": "Seul un admin peut supprimer un canal"}), 403
+
+    channel = ChatChannel.query.filter_by(id=channel_id, project_id=project_id).first_or_404()
+    if channel.is_default:
+        return jsonify({"error": "Le canal par défaut ne peut pas être supprimé"}), 400
+
+    # Detach messages from this channel (don't delete messages)
+    Message.query.filter_by(channel_id=channel_id).update({"channel_id": None})
+    db.session.delete(channel)
+    db.session.commit()
+    return jsonify({"message": f"Canal #{channel.name} supprimé"}), 200
+
+
 # ─── FICHIERS CHAT ─────────────────────────────────────────────────────────────
 @messages_bp.route("/project/<int:project_id>/attachments", methods=["POST"])
 @jwt_required()

@@ -72,14 +72,20 @@ export function disconnectAuthSocket() {
 export function joinProjectRoom(projectId) {
   const s = getAuthSocket();
   if (!s || !projectId) return;
-  const join = () => s.emit('join_project', { project_id: projectId });
+  const join = () => s.emit('join_project', {
+    project_id: projectId,
+    token: localStorage.getItem('auth_token'),
+  });
   if (s.connected) join();
   else s.once('connect', join);
 }
 
 export function leaveProjectRoom(projectId) {
   if (socket?.connected && projectId) {
-    socket.emit('leave_project', { project_id: projectId });
+    socket.emit('leave_project', {
+      project_id: projectId,
+      token: localStorage.getItem('auth_token'),
+    });
   }
 }
 

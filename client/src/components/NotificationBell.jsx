@@ -14,11 +14,13 @@ function timeAgo(isoString) {
 }
 
 const TYPE_ICON = {
-  task_assigned:  '📋',
-  task_validated: '✅',
-  task_rejected:  '❌',
-  task_delivered: '📦',
-  dm_received:    '💬',
+  task_assigned:   '📋',
+  task_validated:  '✅',
+  task_rejected:   '❌',
+  task_delivered:  '📦',
+  dm_received:     '💬',
+  channel_message: '💬',
+  mention:         '🔔',
 };
 
 // ── component ──────────────────────────────────────────────────────────────────
@@ -346,14 +348,20 @@ export default function NotificationBell() {
                     }}>
                       {notif.content}
                     </p>
-                    {notif.link && !notif.is_read && (
+                    {notif.link && (
                       <div style={{
-                        marginTop: '4px',
-                        display: 'flex',
+                        marginTop: '5px',
+                        display: 'inline-flex',
                         alignItems: 'center',
                         gap: '4px',
                         fontSize: '11px',
+                        fontWeight: '600',
                         color: '#22d3ee',
+                        background: 'rgba(34,211,238,0.1)',
+                        border: '1px solid rgba(34,211,238,0.2)',
+                        borderRadius: '5px',
+                        padding: '2px 7px',
+                        cursor: 'pointer',
                       }}>
                         <ExternalLink size={10} />
                         Voir

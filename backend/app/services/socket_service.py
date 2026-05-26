@@ -1,3 +1,4 @@
+from flask import request
 from flask_socketio import emit, join_room, leave_room
 from flask_jwt_extended import decode_token
 from app.extensions import db
@@ -5,6 +6,41 @@ from app.models import User
 from app.models.message import Message, ChatChannel, DirectConversation, MessageMention
 from app.models import Project
 from app.services.notification_service import send_notification
+
+# ── Suivi des connexions en temps réel ──────────────────────────────────────
+# sid  → user_id
+_sid_to_uid: dict[str, int] = {}
+# user_id → ensemble de SIDs (plusieurs onglets possibles)
+_uid_sids: dict[int, set] = {}
+# user_id → ensemble de project_ids rejoints
+_uid_projects: dict[int, set] = {}
+
+
+def _add_sid(user_id: int, sid: str):
+    _sid_to_uid[sid] = user_id
+    _uid_sids.setdefault(user_id, set()).add(sid)
+
+
+def _remove_sid(sid: str):
+    """Retire un SID ; retourne (user_id, still_online) ou (None, False)."""
+    uid = _sid_to_uid.pop(sid, None)
+    if uid is None:
+        return None, False
+    sids = _uid_sids.get(uid, set())
+    sids.discard(sid)
+    if not sids:
+        _uid_sids.pop(uid, None)
+        return uid, False   # plus aucun onglet
+    return uid, True        # d'autres onglets actifs
+
+
+def _online_user_ids_for_project(project_id: int) -> list[int]:
+    """Renvoie la liste des user_ids actuellement connectés dans ce projet."""
+    return [
+        uid for uid, projs in _uid_projects.items()
+        if project_id in projs and uid in _uid_sids
+    ]
+
 
 def register_socket_events(socketio):
 
@@ -22,7 +58,8 @@ def register_socket_events(socketio):
             if not user:
                 return False
             join_room(f"user_{user_id}")
-            print(f"[socket] {user.name} connecte")
+            _add_sid(user_id, request.sid)
+            print(f"[socket] {user.name} connecte (sid={request.sid})")
         except Exception as e:
             print(f"[socket] connexion refusee: {e}")
             return False
@@ -38,10 +75,44 @@ def register_socket_events(socketio):
 
         room = f"project_{project_id}"
         join_room(room)
-        emit("system_message", {
-            "message": f"Vous avez rejoint le projet #{project_id}"
-        })
-        print(f"[socket] utilisateur a rejoint {room}")
+
+        # ── Identifier l'utilisateur via le token (plus fiable que request.sid) ──
+        uid = None
+        token = data.get("token")
+        if token:
+            try:
+                decoded = decode_token(token)
+                uid = int(decoded["sub"])
+                # Mettre à jour le mapping SID→uid ici aussi (double sécurité)
+                _add_sid(uid, request.sid)
+            except Exception:
+                pass
+        if uid is None:
+            # Fallback sur le mapping établi dans on_connect
+            uid = _sid_to_uid.get(request.sid)
+
+        online_ids = _online_user_ids_for_project(project_id)
+        print(f"[socket] join_project: uid={uid} projet={project_id} en_ligne={online_ids}")
+
+        if uid is not None:
+            _uid_projects.setdefault(uid, set()).add(project_id)
+            online_ids = _online_user_ids_for_project(project_id)  # re-calc après ajout
+            # Envoyer au nouveau venu la liste complète des membres en ligne
+            emit("online_in_project", {
+                "project_id": project_id,
+                "online_user_ids": online_ids,
+            })
+            # Notifier les autres membres que cet utilisateur est en ligne
+            emit("user_online", {"user_id": uid, "project_id": project_id},
+                 to=room, include_self=False)
+        else:
+            # Même sans uid, envoyer la liste partielle (peut être vide)
+            emit("online_in_project", {
+                "project_id": project_id,
+                "online_user_ids": online_ids,
+            })
+
+        emit("system_message", {"message": f"Vous avez rejoint le projet #{project_id}"})
 
 
     # ─── QUITTER UN PROJET ────────────────────────────────────────────────────
@@ -53,6 +124,21 @@ def register_socket_events(socketio):
 
         room = f"project_{project_id}"
         leave_room(room)
+
+        # Mettre à jour le suivi de présence
+        uid = None
+        token = data.get("token")
+        if token:
+            try:
+                uid = int(decode_token(token)["sub"])
+            except Exception:
+                pass
+        if uid is None:
+            uid = _sid_to_uid.get(request.sid)
+        if uid is not None:
+            _uid_projects.get(uid, set()).discard(project_id)
+            emit("user_offline", {"user_id": uid, "project_id": project_id}, to=room)
+
         emit("system_message", {
             "message": f"Vous avez quitté le projet #{project_id}"
         })
@@ -111,6 +197,7 @@ def register_socket_events(socketio):
 
             # Broadcaster à toute la room du projet
             room = f"project_{project_id}"
+            channel_name = channel.name if channel_id and channel else "général"
             emit("new_message", {
                 "id":         message.id,
                 "content":    message.content,
@@ -124,6 +211,24 @@ def register_socket_events(socketio):
                 "mentions": [{"id": m.user_id} for m in message.mentions],
                 "created_at": message.created_at.isoformat()
             }, to=room)
+
+            # ── Notifier tous les membres du projet (sauf l'expéditeur) ──────
+            mentioned_ids = {int(uid) for uid in (data.get("mention_user_ids") or [])}
+            for member in project.members:
+                if member.id == user_id:
+                    continue
+                is_mention = member.id in mentioned_ids
+                title = (
+                    f"@Vous dans #{channel_name}" if is_mention
+                    else f"{user.name} dans #{channel_name}"
+                )
+                send_notification(
+                    user_id   = member.id,
+                    title     = title,
+                    content   = content[:80] + ("…" if len(content) > 80 else ""),
+                    notif_type= "mention" if is_mention else "channel_message",
+                    link      = f"project/{project_id}/meeting/channel/{channel_id or ''}",
+                )
 
         except Exception as e:
             emit("error", {"message": str(e)})
@@ -183,7 +288,7 @@ def register_socket_events(socketio):
                 title=f"Message de {sender.name}",
                 content=content[:80] + ("…" if len(content) > 80 else ""),
                 notif_type="dm_received",
-                link=f"/messages/dm/{user_id}",
+                link=f"dm/{user_id}",
             )
         except Exception as e:
             emit("error", {"message": str(e)})
@@ -208,4 +313,12 @@ def register_socket_events(socketio):
     # ─── DÉCONNEXION ──────────────────────────────────────────────────────────
     @socketio.on("disconnect")
     def on_disconnect(reason=None):
-        print(f"[socket] utilisateur deconnecte: {reason}")
+        uid, still_online = _remove_sid(request.sid)
+        print(f"[socket] utilisateur {uid} deconnecte: {reason} (encore en ligne: {still_online})")
+
+        if uid is not None and not still_online:
+            # Notifier toutes les rooms du projet que cet utilisateur est hors ligne
+            projects = _uid_projects.pop(uid, set())
+            for pid in projects:
+                emit("user_offline", {"user_id": uid, "project_id": pid},
+                     to=f"project_{pid}")

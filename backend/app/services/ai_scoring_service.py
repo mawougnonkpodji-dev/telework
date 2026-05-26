@@ -3,11 +3,16 @@ Service de scoring IA :
   - Charge le modèle LinearRegression depuis scoring_model.pkl
   - Extrait les 6 features comportementales depuis la DB
   - Calcule le score et le persiste dans member_scores
+
+Ponctualité :
+  Définie comme le fait de se connecter à 09h00 ou avant (heure locale du serveur).
+  Score = jours où la 1ère connexion ≤ 09:00  /  jours avec au moins une connexion.
+  (Journée de 8h : 09h00 → 17h00)
 """
 
 import os
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, time as dt_time
 
 import joblib
 import numpy as np
@@ -42,25 +47,74 @@ def _load_model():
 
 # ── Extraction des features ────────────────────────────────────────────────────
 
+PUNCTUALITY_HOUR = dt_time(9, 0, 0)   # 09:00:00 heure locale
+
+
+def _local_tz():
+    """Retourne le fuseau horaire local du serveur (stdlib pure)."""
+    return datetime.now().astimezone().tzinfo
+
+
+def _compute_punctuality(user_id: int, since: datetime) -> float:
+    """
+    Ponctualité = % de jours (dans la période) où la 1ère connexion
+    de l'utilisateur est ≤ 09:00 heure locale du serveur.
+
+    - Jours sans aucune connexion : ignorés (pas pénalisés — absence ≠ retard).
+    - Si aucune connexion sur toute la période : retourne 0.5 (neutre).
+    """
+    from app.models.user_login_log import UserLoginLog
+
+    logs = UserLoginLog.query.filter(
+        UserLoginLog.user_id == user_id,
+        UserLoginLog.logged_in_at >= since,
+    ).order_by(UserLoginLog.logged_in_at.asc()).all()
+
+    if not logs:
+        return 0.5  # Aucune donnée → score neutre
+
+    local_tz = _local_tz()
+
+    # Grouper par date locale → garder la 1ère connexion de chaque jour
+    first_login_per_day: dict[str, dt_time] = {}
+    for log in logs:
+        # Convertir UTC → heure locale
+        utc_dt = log.logged_in_at
+        if utc_dt.tzinfo is None:
+            utc_dt = utc_dt.replace(tzinfo=timezone.utc)
+        local_dt = utc_dt.astimezone(local_tz)
+        day_key  = local_dt.date().isoformat()
+        t        = local_dt.time().replace(second=0, microsecond=0)
+        if day_key not in first_login_per_day:
+            first_login_per_day[day_key] = t
+
+    total_days   = len(first_login_per_day)
+    on_time_days = sum(
+        1 for t in first_login_per_day.values() if t <= PUNCTUALITY_HOUR
+    )
+
+    return on_time_days / total_days
+
+
 def _extract_features(user_id: int, project_id: int, since: datetime) -> dict:
     """
     Retourne un dict contenant les 6 variables comportementales (float 0–1).
 
     Définitions :
-      x1  punctuality_score    — % de connexions/actions effectuées à l'heure
-                                 Approx. : tâches livrées AVANT la deadline / nb tâches livrées
+      x1  punctuality_score    — % de jours où la 1ère connexion ≤ 09:00 (heure locale)
       x2  completion_rate      — (tâches validées) / (tâches assignées)
       x3  rejection_rate       — (tâches rejetées) / (tâches livrées)
       x4  interaction_freq     — nb messages envoyés, normalisé par 100 (plafonné à 1)
-      x5  interaction_quality  — taux de réponses reçues (mentions/réponses) relatif
-                                 Approx. : tâches avec commentaires / total tâches
-      x6  review_participation — nb commentaires laissés sur des tâches d'AUTRES membres
-                                 normalisé par 20 (plafonné à 1)
+      x5  interaction_quality  — tâches avec commentaires de l'utilisateur / total tâches
+      x6  review_participation — nb commentaires sur tâches d'AUTRES membres / 20 (plafonné à 1)
     """
     # ── Requêtes tâches ───────────────────────────────────────────────────────
     from app.models.task import task_assignees
     from app.models.message import Message
     from sqlalchemy import text, func
+
+    # x1 — ponctualité basée sur les connexions
+    punctuality_score = _compute_punctuality(user_id, since)
 
     assigned_ids = db.session.execute(
         db.select(task_assignees.c.task_id)
@@ -75,9 +129,8 @@ def _extract_features(user_id: int, project_id: int, since: datetime) -> dict:
     total_assigned = len(assigned_ids)
 
     if total_assigned == 0:
-        # Aucune tâche — score neutre
         return {
-            "punctuality_score":    0.5,
+            "punctuality_score":    punctuality_score,
             "completion_rate":      0.0,
             "rejection_rate":       0.0,
             "interaction_freq":     0.0,
@@ -98,16 +151,6 @@ def _extract_features(user_id: int, project_id: int, since: datetime) -> dict:
 
     # x3 — taux de rejet
     rejection_rate = len(rejected) / len(delivered) if delivered else 0.0
-
-    # x1 — ponctualité : parmi les livrées/validées, combien ont été mises à jour avant la deadline
-    on_time = 0
-    with_deadline = 0
-    for t in delivered:
-        if t.deadline:
-            with_deadline += 1
-            if t.updated_at and t.updated_at <= t.deadline:
-                on_time += 1
-    punctuality_score = (on_time / with_deadline) if with_deadline else 0.7  # neutre si pas de deadline
 
     # ── Messages envoyés (x4) ─────────────────────────────────────────────────
     msg_count = Message.query.filter(

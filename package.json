@@ -1,0 +1,12 @@
+{
+  "name": "telework-monorepo",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c yellow,cyan \"cd backend && python run.py\" \"cd client && npm run dev\"",
+    "dev:backend": "cd backend && python run.py",
+    "dev:frontend": "cd client && npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
