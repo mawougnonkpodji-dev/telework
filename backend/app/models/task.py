@@ -104,12 +104,13 @@ class Comment(db.Model):
 
     def to_dict(self):
         return {
-            "id":         self.id,
-            "task_id":    self.task_id,
-            "author_id":  self.author_id,
-            "content":    self.content,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "id":          self.id,
+            "task_id":     self.task_id,
+            "author_id":   self.author_id,
+            "author_name": self.author.name if self.author else "Inconnu",
+            "content":     self.content,
+            "created_at":  self.created_at.isoformat(),
+            "updated_at":  self.updated_at.isoformat(),
         }
 
 

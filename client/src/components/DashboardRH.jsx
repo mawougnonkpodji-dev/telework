@@ -43,36 +43,6 @@ export default function DashboardRH() {
   const payMemberRef = React.useRef(null);
   React.useEffect(() => { payMemberRef.current = payMember; }, [payMember]);
 
-  // ── Présence en ligne (socket) ───────────────────────────────────────────────
-  const [onlineUsers, setOnlineUsers] = React.useState(() => new Set());
-
-  React.useEffect(() => {
-    if (!selectedProjectId) return;
-    const s = getAuthSocket();
-    if (!s) return;
-    const onOnlineList = ({ online_user_ids }) =>
-      setOnlineUsers(new Set((online_user_ids || []).map(Number)));
-    const onUserOnline = ({ user_id }) =>
-      setOnlineUsers(prev => { const n = new Set(prev); n.add(Number(user_id)); return n; });
-    const onUserOffline = ({ user_id }) =>
-      setOnlineUsers(prev => { const n = new Set(prev); n.delete(Number(user_id)); return n; });
-    s.on('online_in_project', onOnlineList);
-    s.on('user_online',       onUserOnline);
-    s.on('user_offline',      onUserOffline);
-    // Réémettre join_project APRÈS avoir attaché les listeners pour être sûr
-    // de recevoir online_in_project (App.jsx l'a peut-être déjà émis avant notre montage)
-    const requestList = () => s.emit('join_project', {
-      project_id: selectedProjectId,
-      token: localStorage.getItem('auth_token'),
-    });
-    if (s.connected) requestList();
-    else s.once('connect', requestList);
-    return () => {
-      s.off('online_in_project', onOnlineList);
-      s.off('user_online',       onUserOnline);
-      s.off('user_offline',      onUserOffline);
-    };
-  }, [selectedProjectId]);
 
   // ── AI Scoring ───────────────────────────────────────────────────────────────
   const [aiScores,       setAiScores]       = React.useState([]);
@@ -663,7 +633,6 @@ export default function DashboardRH() {
                 <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', fontSize: '14px', color: 'var(--c-text4)' }}>
                   <th style={{ textAlign: 'left', padding: '12px 24px' }}>Nom/Rôle</th>
                   <th style={{ textAlign: 'center', padding: '12px' }}>Barre XP</th>
-                  <th style={{ textAlign: 'center', padding: '12px' }}>Statut</th>
                   {canManagePayroll && <th style={{ textAlign: 'center', padding: '12px' }}>Paie</th>}
                 </tr>
               </thead>
@@ -702,16 +671,6 @@ export default function DashboardRH() {
                             </div>
                             <span style={{ fontSize: '14px', fontWeight: '500', color: '#fbbf24', width: '48px', textAlign: 'right' }}>{member.xp || 0}</span>
                           </div>
-                        </td>
-                        <td style={{ padding: '16px', textAlign: 'center' }}>
-                          {(() => {
-                            const isOnline = onlineUsers.has(Number(member.userId));
-                            return (
-                              <span style={{ padding: '8px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '500', backgroundColor: isOnline ? 'rgba(16, 185, 129, 0.2)' : 'rgba(100, 116, 139, 0.2)', color: isOnline ? '#34d399' : '#94a3b8' }}>
-                                {isOnline ? 'En ligne' : 'Hors ligne'}
-                              </span>
-                            );
-                          })()}
                         </td>
                         {canManagePayroll && (
                           <td style={{ padding: '16px', textAlign: 'center' }}>
@@ -968,7 +927,7 @@ export default function DashboardRH() {
               <Receipt size={20} style={{ color: '#34d399' }} /> Paie &amp; Mobile Money
             </h3>
             <p style={{ fontSize: '12px', color: 'var(--c-text3)', marginBottom: '16px' }}>
-              API <code style={{ color: '#22d3ee' }}>/api/payroll</code> et <code style={{ color: '#22d3ee' }}>/api/mobile-money</code>.
+              Gérez la paie mensuelle et les transactions Mobile Money de votre équipe.
             </p>
             {payrollMsg ? <p style={{ fontSize: '13px', color: '#fbbf24', marginBottom: '12px' }}>{payrollMsg}</p> : null}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>

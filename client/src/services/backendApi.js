@@ -262,6 +262,18 @@ export async function fetchTaskById(taskId) {
   return res.json();
 }
 
+/** Ajoute un commentaire sur une tâche (POST /api/tasks/:id/comments). */
+export async function addTaskComment(taskId, content) {
+  const res = await fetch(url(`/api/tasks/${taskId}/comments`), {
+    method: 'POST',
+    headers: authJsonHeaders(),
+    body: JSON.stringify({ content }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+  return data; // { message, comment }
+}
+
 export async function deleteTaskAttachment(taskId, attachmentId) {
   return fetch(url(`/api/tasks/${taskId}/attachments/${attachmentId}`), {
     method: 'DELETE',

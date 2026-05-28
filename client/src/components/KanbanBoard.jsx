@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Calendar, AlertCircle, Pencil, Trash2, Plus, Send, Upload, Link, Play, Timer, FileText, Eye, Download, Lock } from 'lucide-react';
+import { Calendar, AlertCircle, Pencil, Trash2, Plus, Send, Upload, Link, Play, Timer, FileText, Eye, Download, Lock, MessageSquare } from 'lucide-react';
 import TaskModal from './TaskModal';
+import TaskDetailPanel from './TaskDetailPanel';
 import { checkDependencyMet } from '../utils/taskHelpers';
 import { getApiUrl, authJsonHeaders, enrichBoardTasks, xpToPriority } from '../utils/apiHelpers.js';
 
@@ -209,6 +210,8 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
   const [selectedTaskDetail, setSelectedTaskDetail] = useState(null);
   const [timerTick, setTimerTick] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+  // ── Task detail panel (comments) ──
+  const [detailPanelTask, setDetailPanelTask] = useState(null);
 
   useEffect(() => {
     if (!showValidationModal || !selectedTask?.id) {
@@ -340,6 +343,15 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
          onClose={() => setShowDeliverableModal(false)}
          onSubmit={onTaskSubmit}
          task={selectedTask}
+        />
+
+        {/* Panneau détail + commentaires */}
+        <TaskDetailPanel
+          isOpen={!!detailPanelTask}
+          onClose={() => setDetailPanelTask(null)}
+          task={detailPanelTask}
+          currentUser={user}
+          isObservateur={isObservateur}
         />
 
        {/* Validation Modal - pour que le gestionnaire voie et valide le livrable */}
@@ -698,7 +710,7 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                              ref={provided.innerRef}
                              {...provided.draggableProps}
                              {...provided.dragHandleProps}
-                             onClick={() => { if (isGestionnaire) { setEditingTask(task); setShowTaskForm(true); } }}
+                             onClick={() => setDetailPanelTask(task)}
                              style={{
                               ...provided.draggableProps.style,
                               background: snapshot.isDragging ? 'var(--c-surface)' : 'var(--c-surface2)',
@@ -706,16 +718,27 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                               border: `1px solid ${snapshot.isDragging ? '#4f46e5' : 'rgba(255,255,255,0.08)'}`,
                               zIndex: snapshot.isDragging ? 9999 : 1,
                               transform: snapshot.isDragging ? `${provided.draggableProps.style.transform} rotate(2deg)` : provided.draggableProps.style.transform,
+                              cursor: 'pointer',
                             }}
                           >
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                              <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--c-text)' }}>{task.title}</span>
-                              {isGestionnaire && (
-                                <div style={{ display: 'flex', gap: '6px' }}>
-                                  <button onClick={e => { e.stopPropagation(); setEditingTask(task); setShowTaskForm(true); }} style={{ background: 'none', border: 'none', color: 'var(--c-text4)', cursor: 'pointer' }}><Pencil size={12}/></button>
-                                  <button onClick={e => { e.stopPropagation(); onDeleteTask(task.id, column.id); }} style={{ background: 'none', border: 'none', color: 'var(--c-text4)', cursor: 'pointer' }}><Trash2 size={12}/></button>
-                                </div>
-                              )}
+                              <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--c-text)', flex: 1, minWidth: 0, marginRight: '8px' }}>{task.title}</span>
+                              <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                                {/* Voir détails + commentaires */}
+                                <button
+                                  onClick={e => { e.stopPropagation(); setDetailPanelTask(task); }}
+                                  title="Voir les détails et commentaires"
+                                  style={{ background: 'none', border: 'none', color: 'var(--c-text4)', cursor: 'pointer', padding: '2px' }}
+                                >
+                                  <MessageSquare size={12}/>
+                                </button>
+                                {isGestionnaire && (
+                                  <>
+                                    <button onClick={e => { e.stopPropagation(); setEditingTask(task); setShowTaskForm(true); }} style={{ background: 'none', border: 'none', color: 'var(--c-text4)', cursor: 'pointer', padding: '2px' }}><Pencil size={12}/></button>
+                                    <button onClick={e => { e.stopPropagation(); onDeleteTask(task.id, column.id); }} style={{ background: 'none', border: 'none', color: 'var(--c-text4)', cursor: 'pointer', padding: '2px' }}><Trash2 size={12}/></button>
+                                  </>
+                                )}
+                              </div>
                             </div>
 
                             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>

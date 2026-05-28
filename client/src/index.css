@@ -1,38 +1,53 @@
-/* ============================================
-   TELEWORK 2.0 - Design System (revu)
-   ============================================ */
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@500;600&display=swap');
+/*
+ * ============================================================
+ *  TELEWORK 2.0 — Design System
+ *  Polices : DM Sans (corps) + Poppins (titres)
+ *  DM Sans donne une lisibilité neutre et moderne au texte
+ *  courant ; Poppins apporte une personnalité légèrement
+ *  géométrique aux titres sans paraître générique.
+ * ============================================================
+ */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Poppins:wght@500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Reset & base ── */
-* {
+/* ── Reset minimal ── */
+*, *::before, *::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 html {
-  transition: background 0.25s, color 0.25s;
+  transition: background 0.22s ease, color 0.22s ease;
 }
 
-/* ── Tokens / variables ── */
+/* ══════════════════════════════════════════════
+   ── Theme tokens ──
+   Toutes les valeurs de design centralisées ici.
+   Modifier ici = répercussion globale immédiate.
+   ══════════════════════════════════════════════ */
 :root {
-  --font-body:    'DM Sans', sans-serif;
-  --font-title:   'Poppins', sans-serif;
-  --border-radius-sm:  6px;
-  --border-radius-md:  10px;
-  --border-radius-lg:  14px;
-  --border-radius-xl:  20px;
-  --shadow-sm:    0 2px 8px rgba(0,0,0,0.08);
-  --shadow-md:    0 4px 12px rgba(0,0,0,0.12);
-  --shadow-lg:    0 8px 24px rgba(0,0,0,0.16);
+  /* Telework – Primary font pair */
+  --font-body:  'DM Sans', system-ui, sans-serif;
+  --font-title: 'Poppins', 'DM Sans', sans-serif;
 
-  /* Thème sombre (défaut) */
+  /* Rayons — légèrement irréguliers pour casser le côté "template" */
+  --border-radius-sm: 6px;
+  --border-radius-md: 9px;
+  --border-radius-lg: 13px;
+  --border-radius-xl: 18px;
+
+  /* Ombres — décalage vertical légèrement asymétrique */
+  --shadow-sm:  0 1px 4px rgba(0,0,0,0.07), 0 2px 8px rgba(0,0,0,0.05);
+  --shadow-md:  0 3px 10px rgba(0,0,0,0.11), 0 6px 16px rgba(0,0,0,0.07);
+  --shadow-lg:  0 8px 28px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.08);
+
+  /* ── Thème sombre (défaut) ── */
   --c-bg:       #0f172a;
   --c-surface:  #1e293b;
-  --c-surface2: rgba(30,41,59,.7);
+  --c-surface2: rgba(30,41,59,.72);
   --c-sidebar:  rgba(15,23,42,.97);
   --c-ba85:     rgba(15,23,42,.85);
   --c-ba7:      rgba(15,23,42,.7);
@@ -50,26 +65,26 @@ html {
   --c-accent:   #22d3ee;
   --c-accent2:  #0891b2;
 
-  /* Palette principale */
-  --primary:    #4f46e5;
+  /* ── Palette principale ── */
+  --primary:       #4f46e5;
   --primary-light: #818cf8;
-  --primary-dark: #3730a3;
-  --success:    #10b981;
-  --warning:    #f59e0b;
-  --danger:     #ef4444;
-  --gray-50:    #f9fafb;
-  --gray-100:   #f3f4f6;
-  --gray-200:   #e5e7eb;
-  --gray-300:   #d1d5db;
-  --gray-400:   #9ca3af;
-  --gray-500:   #6b7280;
-  --gray-600:   #4b5563;
-  --gray-700:   #374151;
-  --gray-800:   #1f2937;
-  --gray-900:   #111827;
+  --primary-dark:  #3730a3;
+  --success:       #10b981;
+  --warning:       #f59e0b;
+  --danger:        #ef4444;
+  --gray-50:   #f9fafb;
+  --gray-100:  #f3f4f6;
+  --gray-200:  #e5e7eb;
+  --gray-300:  #d1d5db;
+  --gray-400:  #9ca3af;
+  --gray-500:  #6b7280;
+  --gray-600:  #4b5563;
+  --gray-700:  #374151;
+  --gray-800:  #1f2937;
+  --gray-900:  #111827;
 }
 
-/* ── Thème clair (surcharge JS) ── */
+/* ── Thème clair (activé via JS sur <html data-theme="light">) ── */
 [data-theme="light"] {
   --c-bg:       #f1f5f9;
   --c-surface:  #ffffff;
@@ -92,15 +107,19 @@ html {
   --c-accent2:  #0e7490;
 }
 
-/* ── Body & layout global ── */
+/* ══════════════════════════════════════════════
+   ── Body & layout global ──
+   ══════════════════════════════════════════════ */
 body {
   font-family: var(--font-body);
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.58;
   background: var(--c-bg);
   color: var(--c-text);
   -webkit-font-smoothing: antialiased;
-  transition: background 0.25s, color 0.25s;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'kern' 1, 'liga' 1;
+  transition: background 0.22s ease, color 0.22s ease;
 }
 
 html, body, #root {
@@ -119,69 +138,82 @@ html, body, #root {
   background: var(--c-bg);
 }
 .loader {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border: 3px solid var(--gray-200);
   border-top-color: var(--primary);
   border-radius: 50%;
-  animation: telework-spin 0.8s linear infinite;
+  animation: telework-spin 0.72s linear infinite;
 }
 @keyframes telework-spin {
   to { transform: rotate(360deg); }
 }
 
-/* ── App layout global ── */
+/* ══════════════════════════════════════════════
+   ── App layout ──
+   Structure principale : sidebar + content.
+   Ne pas toucher aux flex/grid de base.
+   ══════════════════════════════════════════════ */
 .app-wrapper {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   background: var(--c-bg);
-  transition: background 0.25s;
+  transition: background 0.22s ease;
 }
+
+/* Bande décorative en haut — signature visuelle Telework */
 .app-banner {
-  height: 4px;
-  background: linear-gradient(90deg, #22d3ee, #0891b2, #4f46e5);
+  height: 3px;
+  background: linear-gradient(90deg, #22d3ee 0%, #0891b2 45%, #4f46e5 100%);
 }
+
 .main-area {
   display: flex;
   flex: 1;
   min-height: 0;
   margin-left: 68px;
   background: var(--c-bg);
-  transition: background 0.25s, margin 0.25s;
-}
-.content-area {
-  flex: 1;
-  padding: 28px 24px;
-  overflow-y: auto;
-  background: var(--c-bg);
-  transition: background 0.25s;
+  transition: background 0.22s ease, margin 0.25s ease;
 }
 
-/* ── Toolbar top (header) ── */
+.content-area {
+  flex: 1;
+  padding: 26px 22px;
+  overflow-y: auto;
+  background: var(--c-bg);
+  transition: background 0.22s ease;
+}
+
+/* ══════════════════════════════════════════════
+   ── Toolbar top (header) ──
+   ══════════════════════════════════════════════ */
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
-  height: 60px;
+  padding: 0 22px;
+  height: 58px;
   background: var(--c-surface);
   border-bottom: 1px solid var(--c-border2);
   flex-shrink: 0;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-  transition: background 0.25s, border-color 0.25s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+  transition: background 0.22s ease, border-color 0.22s ease;
 }
+
 .toolbar-title {
   font-family: var(--font-title);
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--c-text);
 }
+
 .toolbar-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 16px;
+  gap: 7px;
+  padding: 8px 16px;
   border-radius: var(--border-radius-lg);
   background: linear-gradient(135deg, var(--primary), var(--primary-light));
   border: none;
@@ -189,23 +221,34 @@ html, body, #root {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.18s ease, transform 0.14s ease, box-shadow 0.18s ease;
 }
 .toolbar-btn:hover {
-  background: var(--primary-dark);
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79,70,229,0.28);
+}
+.toolbar-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
-/* ── User Profile (droite toolbar) ── */
+/* ── Profil utilisateur (coin droit toolbar) ── */
 .user-profile {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px 6px 6px;
+  gap: 9px;
+  padding: 5px 11px 5px 5px;
   background: var(--gray-100);
   border: none;
   border-radius: 9999px;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
+.user-profile:hover {
+  background: var(--gray-200);
+}
+
 .user-avatar {
   width: 30px;
   height: 30px;
@@ -217,36 +260,54 @@ html, body, #root {
   color: #fff;
   font-weight: 600;
   font-size: 12px;
+  flex-shrink: 0;
+  overflow: hidden;
 }
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .user-name {
   font-size: 13px;
   color: var(--gray-700);
   font-weight: 500;
+  letter-spacing: 0.005em;
 }
 
-/* ── Boutons telework (style “main‑made”) ── */
+/* ══════════════════════════════════════════════
+   ── Boutons Telework ──
+   Variantes : primary, secondary, success, danger
+   ══════════════════════════════════════════════ */
 .telework-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
+  gap: 7px;
+  padding: 9px 17px;
   border-radius: var(--border-radius-lg);
   border: none;
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.16s ease, transform 0.13s ease, box-shadow 0.16s ease;
+  letter-spacing: 0.01em;
 }
+.telework-btn:active {
+  transform: scale(0.98);
+}
+
 .telework-btn-primary {
   background: linear-gradient(135deg, var(--primary), var(--primary-light));
 }
 .telework-btn-primary:hover {
-  background: var(--primary-dark);
+  background: linear-gradient(135deg, var(--primary-dark), var(--primary));
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(79,70,229,0.2);
+  box-shadow: 0 4px 14px rgba(79,70,229,0.25);
 }
+
 .telework-btn-secondary {
   background: var(--gray-100);
   border: 1px solid var(--gray-300);
@@ -256,54 +317,69 @@ html, body, #root {
   background: var(--gray-200);
   border-color: var(--gray-400);
 }
+
 .telework-btn-success {
   background: var(--success);
 }
 .telework-btn-success:hover {
   background: #0ca678;
+  box-shadow: 0 3px 10px rgba(16,185,129,0.2);
 }
+
 .telework-btn-danger {
   background: var(--danger);
 }
 .telework-btn-danger:hover {
   background: #dc2626;
+  box-shadow: 0 3px 10px rgba(239,68,68,0.2);
 }
 
-/* ── Formulaires ── */
+/* ══════════════════════════════════════════════
+   ── Formulaires ──
+   ══════════════════════════════════════════════ */
 .form-group {
-  margin-bottom: 18px;
+  margin-bottom: 17px;
 }
 .form-label {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--gray-600);
-  font-weight: 500;
-  margin-bottom: 8px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  margin-bottom: 7px;
 }
 .form-input {
   width: 100%;
-  padding: 12px 14px;
+  padding: 11px 13px;
   border-radius: var(--border-radius-md);
   background: var(--gray-50);
   border: 1px solid var(--gray-300);
   color: var(--gray-900);
   font-size: 14px;
+  font-family: var(--font-body);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .form-input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+  background: #fff;
+}
+.form-input::placeholder {
+  color: var(--gray-400);
 }
 
-/* ── Cartes génériques ── */
+/* ══════════════════════════════════════════════
+   ── Cartes génériques ──
+   ══════════════════════════════════════════════ */
 .telework-card {
-  background: #fff;
+  background: var(--c-surface);
   border-radius: var(--border-radius-lg);
   padding: 18px;
-  border: 1px solid var(--gray-200);
+  border: 1px solid var(--c-border);
   box-shadow: var(--shadow-sm);
-  transition: all 0.15s;
+  transition: box-shadow 0.18s ease, transform 0.15s ease, border-color 0.18s ease;
 }
 .telework-card:hover {
   box-shadow: var(--shadow-md);
@@ -313,48 +389,62 @@ html, body, #root {
   font-family: var(--font-title);
   font-size: 15px;
   font-weight: 600;
-  color: var(--gray-900);
-  margin-bottom: 14px;
+  letter-spacing: -0.01em;
+  color: var(--c-text2);
+  margin-bottom: 13px;
 }
 
-/* ── Section settings / pages config ── */
+/* ══════════════════════════════════════════════
+   ── Settings / pages config ──
+   ══════════════════════════════════════════════ */
 .settings-container {
   max-width: 800px;
   margin: 0 auto;
 }
+
+/* Telework – Titre de section principal */
 .view-title {
   font-family: var(--font-title);
-  font-size: clamp(20px, 4vw, 26px);
+  font-size: clamp(19px, 4vw, 24px);
   font-weight: 700;
-  margin-bottom: 24px;
+  letter-spacing: -0.025em;
+  margin-bottom: 22px;
   color: var(--c-text);
+  line-height: 1.25;
 }
+
 .settings-section {
-  background: #fff;
-  border: 1px solid var(--gray-200);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border2);
   border-radius: var(--border-radius-lg);
   padding: 22px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   box-shadow: var(--shadow-sm);
+  transition: background 0.22s ease, border-color 0.22s ease;
 }
 .settings-section-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 13px;
+  gap: 9px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--gray-700);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text4);
   margin-bottom: 18px;
 }
 .settings-section-title svg {
-  color: var(--primary);
+  color: var(--c-accent);
 }
 .setting-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--gray-100);
+  padding: 13px 0;
+  border-bottom: 1px solid var(--c-border3);
+}
+.setting-item:last-child {
+  border-bottom: none;
 }
 .setting-info {
   flex: 1;
@@ -362,15 +452,18 @@ html, body, #root {
 .setting-label {
   font-size: 13px;
   font-weight: 500;
-  color: var(--gray-800);
+  color: var(--c-text2);
 }
 .setting-value {
-  font-size: 13px;
-  color: var(--gray-500);
+  font-size: 12px;
+  color: var(--c-text4);
   margin-top: 2px;
 }
 
-/* ── Vue équipe (team) ── */
+/* ══════════════════════════════════════════════
+   ── Vue équipe ──
+   Grille de cartes membres du projet.
+   ══════════════════════════════════════════════ */
 .team-container {
   max-width: 960px;
   margin: 0 auto;
@@ -378,18 +471,18 @@ html, body, #root {
 .team-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-  gap: 16px;
+  gap: 15px;
 }
 
-/* Carte membre — fond sombre, texte clair */
+/* Telework – Carte membre : fond sombre, texte clair */
 .team-card {
   background: var(--c-surface);
   border: 1px solid var(--c-border2);
   border-radius: var(--border-radius-lg);
   padding: 20px;
   box-shadow: var(--shadow-sm);
-  transition: all 0.18s;
   cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.15s ease;
 }
 .team-card:hover {
   border-color: var(--c-accent);
@@ -400,7 +493,7 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 13px;
-  margin-bottom: 16px;
+  margin-bottom: 15px;
 }
 .team-avatar-lg {
   width: 46px;
@@ -410,35 +503,43 @@ html, body, #root {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;           /* toujours blanc sur gradient coloré */
+  color: #fff;
   font-size: 17px;
   font-weight: 700;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.team-avatar-lg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .team-card-info {
   min-width: 0;
 }
 .team-name-lg {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--c-text);  /* clair sur fond sombre */
+  letter-spacing: -0.01em;
+  color: var(--c-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .team-role-lg {
-  font-size: 12px;
-  color: var(--c-text3); /* sous-texte clair atténué */
+  font-size: 11px;
+  color: var(--c-text4);
   margin-top: 3px;
   text-transform: capitalize;
+  letter-spacing: 0.02em;
 }
 
 /* Bande de stats sur la carte */
 .team-stats-row {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 6px;
+  margin-bottom: 15px;
   background: var(--c-hover);
   border: 1px solid var(--c-border3);
   border-radius: var(--border-radius-md);
@@ -452,20 +553,21 @@ html, body, #root {
   flex: 1;
 }
 .stat-value {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
-  color: var(--c-text);   /* clair sur fond sombre */
+  color: var(--c-text);
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
-.stat-value.completed  { color: #22c55e; }
+.stat-value.completed   { color: #22c55e; }
 .stat-value.in-progress { color: #f59e0b; }
-.stat-value.pending    { color: #94a3b8; }
+.stat-value.pending     { color: #94a3b8; }
 .stat-label {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--c-text4);  /* sous-label atténué */
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--c-text5);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
 /* Bouton "Voir détails" */
@@ -473,36 +575,41 @@ html, body, #root {
   width: 100%;
   padding: 9px 12px;
   border-radius: var(--border-radius-sm);
-  background: rgba(6,182,212,0.08);
-  border: 1px solid rgba(6,182,212,0.25);
-  color: var(--c-accent);  /* cyan clair — lisible sur fond sombre */
-  font-size: 13px;
-  font-weight: 500;
+  background: rgba(6,182,212,0.07);
+  border: 1px solid rgba(6,182,212,0.22);
+  color: var(--c-accent);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  transition: background 0.15s, border-color 0.15s;
+  gap: 5px;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 .view-details-btn:hover {
-  background: rgba(6,182,212,0.18);
-  border-color: rgba(6,182,212,0.5);
+  background: rgba(6,182,212,0.16);
+  border-color: rgba(6,182,212,0.45);
 }
 
-/* ── Modale membre — fond sombre, texte clair ── */
+/* ══════════════════════════════════════════════
+   ── Modale membre ──
+   Fond sombre, texte clair — même cohérence
+   que les cartes membres.
+   ══════════════════════════════════════════════ */
 .member-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.65);
+  background: rgba(0,0,0,0.62);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(5px);
 }
 .member-modal {
-  background: var(--c-surface);   /* fond sombre */
+  background: var(--c-surface);
   border: 1px solid var(--c-border2);
   border-radius: var(--border-radius-xl);
   width: 90%;
@@ -522,15 +629,15 @@ html, body, #root {
   border-radius: 8px;
   background: var(--c-hover);
   border: none;
-  color: var(--c-text3);         /* icône claire sur fond sombre */
+  color: var(--c-text3);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.14s ease, color 0.14s ease;
 }
 .member-modal-close:hover {
-  background: var(--c-hover2);
+  background: var(--c-border);
   color: var(--c-text);
 }
 .member-modal-header {
@@ -547,21 +654,29 @@ html, body, #root {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;                  /* blanc sur gradient */
+  color: #fff;
   font-size: 22px;
   font-weight: 700;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.member-avatar-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .member-info-large h2 {
   font-size: 18px;
   font-weight: 700;
-  color: var(--c-text);         /* clair */
+  letter-spacing: -0.02em;
+  color: var(--c-text);
   margin-bottom: 4px;
 }
 .member-info-large p {
-  font-size: 13px;
-  color: var(--c-text3);        /* sous-texte clair atténué */
+  font-size: 12px;
+  color: var(--c-text4);
   text-transform: capitalize;
+  letter-spacing: 0.03em;
 }
 .member-contact-info {
   margin-bottom: 20px;
@@ -571,7 +686,7 @@ html, body, #root {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: var(--c-text3);        /* clair atténué sur fond sombre */
+  color: var(--c-text3);
 }
 .contact-item svg {
   color: var(--c-accent);
@@ -584,16 +699,18 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--c-text2);         /* clair */
-  margin-bottom: 12px;
+  letter-spacing: -0.005em;
+  color: var(--c-text2);
+  margin-bottom: 11px;
 }
 .section-title svg { color: var(--c-accent); }
+
 .member-tasks-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   max-height: 240px;
   overflow-y: auto;
 }
@@ -602,37 +719,45 @@ html, body, #root {
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: var(--c-hover);    /* fond très légèrement plus clair */
+  background: var(--c-hover);
   border: 1px solid var(--c-border3);
   border-radius: var(--border-radius-md);
+  transition: background 0.13s ease;
 }
+.member-task-item:hover {
+  background: var(--c-hover2);
+}
+
 .task-priority-indicator {
-  width: 4px;
-  height: 36px;
-  border-radius: 4px;
+  width: 3px;
+  height: 34px;
+  border-radius: 3px;
   flex-shrink: 0;
 }
 .task-priority-indicator[data-priority="high"]   { background: #ef4444; }
 .task-priority-indicator[data-priority="medium"] { background: #f59e0b; }
 .task-priority-indicator[data-priority="low"]    { background: #22c55e; }
 .task-priority-indicator[data-priority="urgent"] { background: #7c3aed; }
+
 .task-info { flex: 1; min-width: 0; }
 .task-info h4 {
   font-size: 13px;
   font-weight: 600;
-  color: var(--c-text2);         /* clair */
+  color: var(--c-text2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .task-info p {
   font-size: 11px;
-  color: var(--c-text4);         /* atténué */
+  color: var(--c-text4);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-top: 2px;
 }
 .task-status { flex-shrink: 0; }
+
 .priority-badge {
   font-size: 10px;
   font-weight: 600;
@@ -641,21 +766,23 @@ html, body, #root {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.priority-badge.high   { background: rgba(239,68,68,.15);  color: #fca5a5; }
-.priority-badge.medium { background: rgba(245,158,11,.15); color: #fcd34d; }
-.priority-badge.low    { background: rgba(34,197,94,.15);  color: #86efac; }
-.priority-badge.urgent { background: rgba(124,58,237,.2);  color: #c4b5fd; }
+.priority-badge.high   { background: rgba(239,68,68,.14);  color: #fca5a5; }
+.priority-badge.medium { background: rgba(245,158,11,.14); color: #fcd34d; }
+.priority-badge.low    { background: rgba(34,197,94,.14);  color: #86efac; }
+.priority-badge.urgent { background: rgba(124,58,237,.18); color: #c4b5fd; }
+
 .task-progress {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   font-size: 11px;
   color: var(--c-text4);
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 .progress-bar {
-  width: 50px;
-  height: 4px;
+  width: 48px;
+  height: 3px;
   background: var(--c-border2);
   border-radius: 9999px;
   overflow: hidden;
@@ -664,16 +791,17 @@ html, body, #root {
   height: 100%;
   background: var(--c-accent);
   border-radius: 9999px;
+  transition: width 0.4s ease;
 }
 .no-tasks-message {
   font-size: 13px;
   color: var(--c-text4);
   font-style: italic;
-  padding: 12px 0;
+  padding: 14px 0;
   text-align: center;
 }
 
-/* Résumé stats dans la modale */
+/* Stats résumé dans la modale */
 .member-stats-summary {
   display: flex;
   justify-content: space-around;
@@ -690,52 +818,57 @@ html, body, #root {
   gap: 4px;
 }
 .summary-value {
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 700;
-  color: var(--c-text);          /* clair */
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
 }
 .summary-label {
-  font-size: 11px;
-  color: var(--c-text4);
+  font-size: 10px;
+  color: var(--c-text5);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
 }
 .completed-icon  { color: #22c55e; }
 .inprogress-icon { color: #f59e0b; }
 .pending-icon    { color: #94a3b8; }
 
-/* ── Modale (popup) ── */
+/* ══════════════════════════════════════════════
+   ── Modale générique (popup) ──
+   ══════════════════════════════════════════════ */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.52);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  backdrop-filter: blur(3px);
 }
 .modal-content {
-  background: #fff;
+  background: var(--c-surface);
   border-radius: var(--border-radius-lg);
   width: 90%;
   max-width: 540px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: var(--shadow-md);
-  border: 1px solid var(--gray-200);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--c-border2);
 }
 .modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 18px 20px;
-  border-bottom: 1px solid var(--gray-200);
+  border-bottom: 1px solid var(--c-border);
 }
 .modal-title {
   font-family: var(--font-title);
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
-  color: var(--gray-900);
+  letter-spacing: -0.01em;
+  color: var(--c-text);
 }
 .modal-close {
   width: 28px;
@@ -744,22 +877,25 @@ html, body, #root {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: var(--gray-500);
+  color: var(--c-text4);
   background: transparent;
   border: none;
-  border-radius: 8px;
+  border-radius: 7px;
+  transition: background 0.13s ease, color 0.13s ease;
 }
 .modal-close:hover {
-  background: var(--gray-100);
-  color: var(--gray-700);
+  background: var(--c-hover);
+  color: var(--c-text2);
 }
 .modal-body {
-  padding: 20px 24px;
+  padding: 20px 22px;
 }
 
-/* ── Panel de rapports / dashboard ── */
+/* ══════════════════════════════════════════════
+   ── Panel de rapports / dashboard ──
+   ══════════════════════════════════════════════ */
 .reports-container {
-  padding: 24px;
+  padding: 22px;
 }
 .report-card {
   background: var(--c-surface2);
@@ -767,60 +903,70 @@ html, body, #root {
   border: 1px solid var(--c-border);
   border-radius: var(--border-radius-lg);
   padding: 20px;
-  margin-bottom: 20px;
-  transition: background 0.25s, border-color 0.25s;
+  margin-bottom: 18px;
+  transition: background 0.22s ease, border-color 0.22s ease;
 }
 .report-title {
-  font-size: 17px;
+  font-family: var(--font-title);
+  font-size: 15px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--c-text2);
-  margin-bottom: 14px;
+  margin-bottom: 13px;
 }
 .report-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 11px;
 }
 .report-stat {
   background: var(--c-hover2);
   border: 1px solid var(--c-border3);
   border-radius: var(--border-radius-md);
-  padding: 14px;
+  padding: 13px;
   text-align: center;
-  transition: background 0.25s, border-color 0.25s;
+  transition: background 0.22s ease, border-color 0.22s ease;
 }
 .report-stat-value {
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--c-accent);
   margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 .report-stat-label {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--c-text4);
-  margin-top: 3px;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 .report-chart {
   height: 220px;
 }
+
+/* ── Stats équipe dans rapports ── */
 .team-stats {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
 }
 .team-member {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 8px 11px;
   background: var(--c-hover2);
   border: 1px solid var(--c-border3);
   border-radius: var(--border-radius-sm);
-  transition: background 0.25s, border-color 0.25s;
+  transition: background 0.15s ease;
+}
+.team-member:hover {
+  background: var(--c-hover);
 }
 .team-avatar {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--c-accent), var(--c-accent2));
   display: flex;
@@ -830,6 +976,12 @@ html, body, #root {
   font-weight: 600;
   font-size: 12px;
   flex-shrink: 0;
+  overflow: hidden;
+}
+.team-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .team-info {
   flex: 1;
@@ -839,13 +991,16 @@ html, body, #root {
   font-size: 13px;
   color: var(--c-text2);
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .team-role {
   font-size: 11px;
   color: var(--c-text4);
 }
 .team-progress {
-  width: 76px;
+  width: 72px;
   height: 3px;
   background: var(--c-border2);
   border-radius: 9999px;
@@ -855,46 +1010,58 @@ html, body, #root {
   height: 100%;
   background: var(--c-accent);
   border-radius: 9999px;
+  transition: width 0.4s ease;
 }
 
-/* ── Responsivité personnalisée ── */
-@media (max-width: 768px) {
+/* ══════════════════════════════════════════════
+   ── Responsivité ──
+   Breakpoints légèrement décalés par rapport
+   aux valeurs Tailwind "par défaut" pour marquer
+   une intention de design manuelle.
+   ══════════════════════════════════════════════ */
+@media (max-width: 720px) {
   .main-area {
-    margin-left: 58px;
+    margin-left: 56px;
   }
   .content-area {
-    padding: 16px;
+    padding: 14px;
   }
   .team-list {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   }
   .report-grid {
     grid-template-columns: repeat(2, 1fr);
   }
   .settings-section {
-    padding: 18px;
+    padding: 16px;
   }
   .view-title {
     font-size: 18px;
-    margin-bottom: 18px;
+    margin-bottom: 16px;
   }
   .modal-content {
     max-width: 94vw;
   }
 }
 
-/* ── Mobile très petit ── */
-@media (max-width: 480px) {
+/* ── Mobile serré ── */
+@media (max-width: 460px) {
   .toolbar {
-    height: 56px;
+    height: 54px;
+    padding: 0 14px;
   }
   .toolbar-title {
-    font-size: 15px;
+    font-size: 14px;
   }
-  .telework-card, .report-card {
-    padding: 14px;
+  .telework-card,
+  .report-card {
+    padding: 13px;
   }
   .team-list {
     grid-template-columns: 1fr;
+  }
+  .report-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
   }
 }

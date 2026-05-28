@@ -546,84 +546,132 @@ function App() {
         />
       )}
 
-<div style={{
-         flex: 1,
-         marginLeft: sidebarCollapsed ? '60px' : '220px',
-         transition: 'margin-left 0.3s ease',
-         minHeight: '100vh',
-         height: '100vh',
-         overflowY: 'auto',
-         overflowX: 'hidden'
-       }}>
+{/* ── Zone principale — contenu dynamique selon la vue ── */}
+      <div style={{
+        flex: 1,
+        marginLeft: sidebarCollapsed ? '60px' : '220px',
+        transition: 'margin-left 0.28s ease',
+        minHeight: '100vh',
+        height: '100vh',
+        overflowY: 'auto',
+        overflowX: 'hidden',
+      }}>
+
+        {/* ── Vue Workspace (Kanban) ── */}
         {currentView === 'workspace' && (
-          <div style={{ padding: '24px' }}>
+          <div style={{ padding: '22px' }}>
+
+            {/* En-tête du workspace : projet actif + recherche + avatar */}
             <div style={{
-              padding: '16px 24px',
-              borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
+              padding: '14px 20px',
+              marginBottom: '4px',
+              borderBottom: '1px solid var(--c-border)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               flexWrap: 'wrap',
               gap: '12px',
             }}>
-<div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', flex: '1 1 280px' }}>
-                 <div style={{
-                   width: '36px', height: '36px', borderRadius: '12px',
-                   background: `linear-gradient(135deg, ${activeProject?.color_theme || '#22d3ee'}, ${activeProject?.color_theme || '#22d3ee'}dd)`,
-                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                   fontSize: '18px'
-                 }}>
-                   {activeProject?.icon || activeProject?.name?.charAt(0).toUpperCase() || '?'}
-                 </div>
-                 <div className="glass-card" style={{
-                   padding: '8px 16px',
-                   display: 'flex',
-                   alignItems: 'center',
-                   gap: '10px'
-                 }}>
-                   <div style={{
-                     width: '8px',
-                     height: '8px',
-                     borderRadius: '50%',
-                     background: serverStatus === 'online' ? '#10b981' : '#ef4444'
-                   }} />
-                   <span style={{ fontSize: '13px', color: 'var(--c-text2)', fontWeight: '500' }}>
-                     {activeProject?.name || 'Sélectionner un espace'}
-                   </span>
-                 </div>
-               <div style={{
-                 fontSize: '12px',
-                 color: 'var(--c-text4)',
-                 padding: '4px 10px',
-                 background: 'rgba(34,211,238,0.1)',
-                 borderRadius: '6px',
-                 border: '1px solid rgba(34,211,238,0.2)'
-               }}>
-                 {activeProject?.slug || '---'}
-               </div>
-               <GlobalSearchBar
-                 projects={projects}
-                 activeProject={activeProject}
-                 onSelectProject={handleProjectChange}
-                 onSelectTask={handleSearchSelectTask}
-               />
-             </div>
+
+              {/* Côté gauche : icône projet + nom + slug + recherche */}
               <div style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #22d3ee, #0891b2)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '14px',
-                fontWeight: '600',
-                color: 'var(--c-bg)'
+                gap: '14px',
+                flexWrap: 'wrap',
+                flex: '1 1 260px',
               }}>
-                {(user?.name || user?.nom || 'U').charAt(0).toUpperCase()}
+                {/* Icône / lettre du projet actif */}
+                <div style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '10px',
+                  background: `linear-gradient(135deg, ${activeProject?.color_theme || '#22d3ee'}, ${activeProject?.color_theme || '#22d3ee'}cc)`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '17px',
+                  flexShrink: 0,
+                }}>
+                  {activeProject?.icon || activeProject?.name?.charAt(0).toUpperCase() || '?'}
+                </div>
+
+                {/* Nom du projet + indicateur statut serveur */}
+                <div className="glass-card" style={{
+                  padding: '7px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '9px',
+                }}>
+                  {/* Point vert/rouge selon connectivité serveur */}
+                  <div style={{
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                    background: serverStatus === 'online' ? '#10b981' : '#ef4444',
+                    boxShadow: serverStatus === 'online'
+                      ? '0 0 0 2px rgba(16,185,129,0.2)'
+                      : '0 0 0 2px rgba(239,68,68,0.2)',
+                  }} />
+                  <span style={{ fontSize: '13px', color: 'var(--c-text2)', fontWeight: '500' }}>
+                    {activeProject?.name || 'Sélectionner un espace'}
+                  </span>
+                </div>
+
+                {/* Slug du projet (identifiant court) */}
+                {activeProject?.slug && (
+                  <div style={{
+                    fontSize: '11px',
+                    color: 'var(--c-text4)',
+                    padding: '3px 9px',
+                    background: 'rgba(34,211,238,0.08)',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(34,211,238,0.18)',
+                    letterSpacing: '0.04em',
+                    fontWeight: '500',
+                  }}>
+                    {activeProject.slug}
+                  </div>
+                )}
+
+                <GlobalSearchBar
+                  projects={projects}
+                  activeProject={activeProject}
+                  onSelectProject={handleProjectChange}
+                  onSelectTask={handleSearchSelectTask}
+                />
+              </div>
+
+              {/* Côté droit : avatar utilisateur connecté */}
+              <div
+                title={user?.name || user?.email || ''}
+                style={{
+                  width: '34px',
+                  height: '34px',
+                  borderRadius: '50%',
+                  background: user?.avatar
+                    ? 'transparent'
+                    : 'linear-gradient(135deg, #22d3ee, #0891b2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  color: 'var(--c-bg)',
+                  flexShrink: 0,
+                  overflow: 'hidden',
+                  cursor: 'default',
+                }}
+              >
+                {user?.avatar
+                  ? <img src={user.avatar} alt={user?.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : (user?.name || user?.nom || 'U').charAt(0).toUpperCase()
+                }
               </div>
             </div>
 
+            {/* Corps du workspace — KanbanBoard */}
             <div style={{ position: 'relative' }}>
             <KanbanBoard
               tasks={currentTasks}
