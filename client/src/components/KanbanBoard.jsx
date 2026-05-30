@@ -888,10 +888,10 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                                   )
                                 )}
 
-                                {/* Bouton Livrer */}
-                                {column.id === 'inProgress' && task.status === 'in_progress' && task.assignee_id === user?.id && !isObservateur && (
-                                  <button onClick={e => { e.stopPropagation(); setSelectedTask(task); setShowDeliverableModal(true); }} style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: '700', background: '#4f46e5', color: '#fff', border: 'none', cursor: 'pointer', marginRight: '4px' }}>
-                                    <Send size={10} style={{marginRight: 4}}/>Livrer
+                                {/* Bouton Livrer — visible aussi sur les tâches rejetées pour permettre une re-livraison */}
+                                {(task.status === 'in_progress' || task.status === 'rejected') && task.assignee_id === user?.id && !isObservateur && (
+                                  <button onClick={e => { e.stopPropagation(); setSelectedTask(task); setShowDeliverableModal(true); }} style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: '700', background: task.status === 'rejected' ? '#f59e0b' : '#4f46e5', color: '#fff', border: 'none', cursor: 'pointer', marginRight: '4px' }}>
+                                    <Send size={10} style={{marginRight: 4}}/>{task.status === 'rejected' ? 'Re-livrer' : 'Livrer'}
                                   </button>
                                 )}
                                {column.id === 'review' && isGestionnaire && task.status === 'delivered' && (

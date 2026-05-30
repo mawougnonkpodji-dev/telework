@@ -696,18 +696,30 @@ function App() {
               onTaskSubmit={async (taskId, deliverable, deliverableType) => {
                 try {
                   if (deliverableType === 'fichier' && deliverable instanceof File) {
+                    // 1. Upload du fichier
                     const fd = new FormData();
                     fd.append('file', deliverable);
-                    const response = await fetch(`${API_URL}/api/tasks/${taskId}/attachments`, {
+                    const uploadRes = await fetch(`${API_URL}/api/tasks/${taskId}/attachments`, {
                       method: 'POST',
                       headers: authBearerHeaders(),
                       body: fd,
                     });
-                    if (!response.ok) {
-                      const errorData = await response.json().catch(() => ({}));
-                      throw new Error(errorData.error || `Upload ${response.status}`);
+                    if (!uploadRes.ok) {
+                      const err = await uploadRes.json().catch(() => ({}));
+                      throw new Error(err.error || `Upload échoué (${uploadRes.status})`);
+                    }
+                    // 2. Passage du statut à "delivered" (obligatoire — sans ça la tâche reste in_progress)
+                    const statusRes = await fetch(`${API_URL}/api/tasks/${taskId}`, {
+                      method: 'PUT',
+                      headers: authJsonHeaders(),
+                      body: JSON.stringify({ status: 'delivered' }),
+                    });
+                    if (!statusRes.ok) {
+                      const err = await statusRes.json().catch(() => ({}));
+                      throw new Error(err.error || `Mise à jour statut (${statusRes.status})`);
                     }
                   } else {
+                    // Lien URL ou rapport texte : description + statut en un seul PUT
                     const text =
                       deliverableType === 'rapport'
                         ? String(deliverable || '')
@@ -721,12 +733,12 @@ function App() {
                     });
                     if (!ures.ok) {
                       const err = await ures.json().catch(() => ({}));
-                      throw new Error(err.error || `Mise à jour ${ures.status}`);
+                      throw new Error(err.error || `Mise à jour échouée (${ures.status})`);
                     }
                   }
                 } catch (err) {
                   console.error('Livrable error:', err);
-                  alert('Erreur livrable: ' + err.message);
+                  alert('Erreur lors de la livraison : ' + err.message);
                   return;
                 }
                 fetchData();
