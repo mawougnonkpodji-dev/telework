@@ -284,17 +284,18 @@ def get_task(task_id):
     if not task_project_member_or_403(user_id, task):
         return jsonify({"error": "Accès refusé"}), 403
 
+    # Matérialiser toutes les relations en une passe (lazy="dynamic" → .all())
+    subtasks    = task.subtasks.all()
+    comments    = task.comments.order_by("created_at").all()
+    history     = task.history.order_by("created_at").all()
+    attachments = task.attachments.all()
+
     data = task.to_dict()
-    data["subtasks"] = [t.to_dict() for t in task.subtasks]
-    data["comments"] = [c.to_dict() for c in task.comments]
-    data["history"] = [
-        {"action": h.action, "by": h.user_id, "at": h.created_at.isoformat()}
-        for h in task.history
-    ]
+    data["subtasks"]    = [t.to_dict() for t in subtasks]
+    data["comments"]    = [c.to_dict() for c in comments]
+    data["history"]     = [{"action": h.action, "by": h.user_id, "at": h.created_at.isoformat()} for h in history]
     base = f"/api/tasks/{task.id}/attachments"
-    data["attachments"] = [
-        a.to_dict(download_path=f"{base}/{a.id}/file") for a in task.attachments
-    ]
+    data["attachments"] = [a.to_dict(download_path=f"{base}/{a.id}/file") for a in attachments]
     return jsonify({"task": data}), 200
 
 
