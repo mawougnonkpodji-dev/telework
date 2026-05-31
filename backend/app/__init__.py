@@ -120,4 +120,8 @@ def create_app(env="development"):
             "detail": str(exc),
         }), 503
 
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):
+        db.session.remove(),
+
     return app
