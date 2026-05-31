@@ -13,11 +13,11 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Robustesse réseau : pré-ping + recyclage + timeout de connexion
     SQLALCHEMY_ENGINE_OPTIONS = {
-        # pool_pre_ping retiré : il ajoutait un SELECT 1 (round-trip réseau)
-        # sur chaque connexion sortie du pool. pool_recycle + keepalives suffisent.
-        "pool_recycle": 280,          # recycle toutes les ~4 min (< keep-alive Supabase 300 s)
-        "pool_size": 10,              # augmenté pour absorber les pics de concurrence
-        "max_overflow": 20,
+
+        # Sur chaque connexion sortie du pool. pool_recycle + keepalives suffisent.
+        "pool_recycle": 280,
+        "pool_size": 5,              # exactement la limite de supabase
+        "max_overflow": 10,
         "pool_timeout": 20,
         "connect_args": {
             "connect_timeout": 10,
