@@ -406,7 +406,7 @@ export default function DashboardRH() {
             color: '#ffffff',
             letterSpacing: '-0.02em'
           }}>Pilotage RH - Dashboard</h1>
-          <button onClick={fetchDashboardData} disabled={loading} style={{
+          <button onClick={() => fetchDashboardData()} disabled={loading} style={{
             backgroundColor: '#2563eb',
             color: '#ffffff',
             padding: '10px 24px',

@@ -263,6 +263,10 @@ def export_csv(project_id):
     user_id = int(get_jwt_identity())
     if not get_project_for_user(user_id, project_id):
         return jsonify({"error": "Accès refusé"}), 403
+    from app.utils.project_access import get_member_role
+    from app.models.project import MemberRole
+    if get_member_role(user_id, project_id) == MemberRole.observateur:
+        return jsonify({"error": "Les observateurs ne peuvent pas exporter les données"}), 403
 
     tasks = Task.query.filter_by(project_id=project_id).order_by(Task.created_at.asc()).all()
     out = StringIO()
@@ -308,6 +312,10 @@ def export_pdf(project_id):
     project = get_project_for_user(user_id, project_id)
     if not project:
         return jsonify({"error": "Accès refusé"}), 403
+    from app.utils.project_access import get_member_role
+    from app.models.project import MemberRole
+    if get_member_role(user_id, project_id) == MemberRole.observateur:
+        return jsonify({"error": "Les observateurs ne peuvent pas exporter les données"}), 403
 
     tasks = Task.query.filter_by(project_id=project_id).order_by(Task.created_at.asc()).all()
     validated = sum(1 for t in tasks if t.status == TaskStatus.validated)

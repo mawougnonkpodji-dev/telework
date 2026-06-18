@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from './contexts/AuthContext.jsx';
 import { useProject } from './contexts/ProjectContext.jsx';
-import SetupWizard from './components/SetupWizard';
+import NoProjectPrompt from './components/NoProjectPrompt';
 import KanbanBoard from './components/KanbanBoard';
 import DashboardRH from './components/DashboardRH';
 import Sidebar from './components/Sidebar';
@@ -33,7 +33,7 @@ import {
 const API_URL = getApiUrl();
 
 function App() {
-  const { user, token, loading } = useAuth();
+  const { user, token, loading, refreshUser } = useAuth();
   const { setActiveProjectId } = useProject();
   const [projects, setProjects] = useState([]);
   const [activeProject, setActiveProject] = useState(null);
@@ -354,24 +354,6 @@ function App() {
     window.location.href = '/auth';
   };
 
-  const handleSetupWizardComplete = async (payload) => {
-    const created = payload?.projects;
-    if (Array.isArray(created) && created.length) {
-      setProjects(created);
-      const p = created[0];
-      setActiveProject(p);
-      setActiveProjectId(p.id);
-      localStorage.setItem('last_project_id', String(p.id));
-      fetchProjectTasks(p.id);
-    }
-    const list = await fetchProjects({ preserveOnError: true });
-    if (!list.length && (!created || !created.length)) {
-      window.alert(
-        'Impossible de charger vos projets après la création. Vérifiez le réseau ou reconnectez-vous.'
-      );
-    }
-  };
-
   const handleProjectCreate = async (projectData) => {
       const authToken = localStorage.getItem('auth_token');
       try {
@@ -388,11 +370,12 @@ function App() {
             return;
           }
           setProjects(prev => [...prev, newProject]);
-          setActiveProject(newProject);
           setProjectTasks(prev => ({ ...prev, [newProject.id]: { todo: [], inProgress: [], review: [], done: [] } }));
           localStorage.setItem('last_project_id', newProject.id.toString());
-          setActiveProjectId(newProject.id); // sync
+          setActiveProjectId(newProject.id);
           handleProjectChange(newProject);
+          // Rafraîchit le rôle user (le créateur devient admin)
+          if (body.user) refreshUser();
         }
       } catch (e) {
         console.log('Error creating project');
@@ -403,7 +386,8 @@ function App() {
   const handleProjectChange = (project) => {
     setActiveProject(project);
     localStorage.setItem('last_project_id', project.id.toString());
-    setActiveProjectId(project.id); // sync with ProjectContext
+    setActiveProjectId(project.id);
+    window.dispatchEvent(new CustomEvent('projectChanged', { detail: project }));
     if (!projectTasks[project.id]) {
       fetchProjectTasks(project.id);
     }
@@ -411,30 +395,37 @@ function App() {
   };
 
   const handleTaskMove = async (taskId, fromColumn, toColumn) => {
+    const status = DROPPABLE_TO_TASK_STATUS[toColumn];
+    if (!status) return;
+
+    // Mise à jour optimiste immédiate
+    setProjectTasks(prev => {
+      const newTasks = { ...prev };
+      const currentTasks = { ...(newTasks[activeProject?.id] || { todo: [], inProgress: [], review: [], done: [] }) };
+      const taskIndex = currentTasks[fromColumn]?.findIndex(t => t.id === taskId);
+      if (taskIndex !== -1 && taskIndex !== undefined) {
+        const task = currentTasks[fromColumn][taskIndex];
+        currentTasks[fromColumn] = currentTasks[fromColumn].filter((_, i) => i !== taskIndex);
+        currentTasks[toColumn] = [...(currentTasks[toColumn] || []), { ...task, column_name: toColumn }];
+        newTasks[activeProject.id] = currentTasks;
+      }
+      return newTasks;
+    });
+
     try {
-      const status = DROPPABLE_TO_TASK_STATUS[toColumn];
-      if (!status) return;
       const res = await fetch(`${API_URL}/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: authJsonHeaders(),
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) return;
-      setProjectTasks(prev => {
-        const newTasks = { ...prev };
-        const currentTasks = newTasks[activeProject?.id] || { todo: [], inProgress: [], review: [], done: [] };
-        const taskIndex = currentTasks[fromColumn]?.findIndex(t => t.id === taskId);
-        if (taskIndex !== -1 && taskIndex !== undefined) {
-          const [task] = currentTasks[fromColumn].splice(taskIndex, 1);
-          currentTasks[toColumn] = [...(currentTasks[toColumn] || []), { ...task, column_name: toColumn }];
-          newTasks[activeProject.id] = currentTasks;
-        }
-        return newTasks;
-      });
-      // Notify dashboard to refresh
+      if (!res.ok) {
+        // Annulation : recharge l'état réel depuis le serveur
+        fetchProjectTasks(activeProject.id);
+        return;
+      }
       window.dispatchEvent(new CustomEvent('taskUpdated'));
-    } catch (e) {
-      console.log('Error moving task');
+    } catch {
+      fetchProjectTasks(activeProject.id);
     }
   };
 
@@ -492,10 +483,6 @@ function App() {
         </div>
       </div>
     );
-  }
-
-  if (projects.length === 0) {
-    return <SetupWizard onComplete={handleSetupWizardComplete} />;
   }
 
   const currentTasks = projectTasks[activeProject?.id] || { todo: [], inProgress: [], review: [], done: [] };
@@ -556,6 +543,14 @@ function App() {
         overflowY: 'auto',
         overflowX: 'hidden',
       }}>
+
+        {/* ── Aucun projet : invite à créer ou attendre ── */}
+        {projects.length === 0 && (
+          <NoProjectPrompt onCreateProject={() => setIsWizardOpen(true)} />
+        )}
+
+        {/* ── Vues principales (uniquement si un projet existe) ── */}
+        {projects.length > 0 && <>
 
         {/* ── Vue Workspace (Kanban) ── */}
         {currentView === 'workspace' && (
@@ -840,8 +835,8 @@ function App() {
           />
         )}
 
-        {currentView === 'reports' && isProjectAdmin && (
-          <ReportsPanel projectId={activeProject?.id} />
+        {currentView === 'reports' && (isProjectAdmin || myProjectMemberRole === 'observateur') && (
+          <ReportsPanel projectId={activeProject?.id} myRole={myProjectMemberRole} />
         )}
 
         {currentView === 'sprints' && isProjectAdmin && (
@@ -895,6 +890,8 @@ function App() {
         {currentView === 'settings' && (
           <SettingsView user={user} activeProject={activeProject} myProjectRole={myProjectMemberRole} />
         )}
+
+        </>}
       </div>
     </div>
   );

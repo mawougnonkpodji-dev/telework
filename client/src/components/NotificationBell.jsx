@@ -7,6 +7,7 @@ import { getAuthSocket } from '../utils/socket.js';
 function timeAgo(isoString) {
   if (!isoString) return '';
   const diff = Math.floor((Date.now() - new Date(isoString)) / 1000);
+  if (diff < 10)  return 'à l\'instant';
   if (diff < 60)  return `${diff}s`;
   if (diff < 3600) return `${Math.floor(diff / 60)}min`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
@@ -28,8 +29,15 @@ export default function NotificationBell() {
   const [open,          setOpen]          = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [loading,       setLoading]       = useState(false);
+  const [,              setTick]          = useState(0);
   const panelRef = useRef(null);
   const bellRef  = useRef(null);
+
+  // Rafraîchit l'affichage du temps relatif toutes les 30 secondes
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 

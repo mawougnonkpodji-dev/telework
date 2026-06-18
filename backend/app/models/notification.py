@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from app.extensions import db
+from app.models.message import _iso
 
 
 class Notification(db.Model):
@@ -27,5 +28,5 @@ class Notification(db.Model):
             "type": self.type,
             "is_read": self.is_read,
             "link": self.link,
-            "created_at": self.created_at.isoformat(),
+            "created_at": _iso(self.created_at),
         }

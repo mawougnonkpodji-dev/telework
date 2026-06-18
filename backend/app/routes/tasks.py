@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db, socketio
 from app.models import Task, Project
@@ -56,8 +57,17 @@ def _parse_priority(val):
 
 
 def _assignees_allowed(project, assignee_ids):
+    """Vérifie que tous les assignés sont membres ET non-observateurs."""
+    from app.utils.project_access import get_member_role
+    from app.models.project import MemberRole
     mids = {m.id for m in project.members}
-    return all(uid in mids for uid in assignee_ids)
+    for uid in assignee_ids:
+        if uid not in mids:
+            return False
+        role = get_member_role(uid, project.id)
+        if role == MemberRole.observateur:
+            return False
+    return True
 
 
 def _sync_task_labels(task, label_ids):
@@ -179,7 +189,7 @@ def create_task():
 
     assignee_ids = data.get("assignees", [])
     if assignee_ids and not _assignees_allowed(project, assignee_ids):
-        return jsonify({"error": "Un ou plusieurs assignés ne sont pas membres du projet"}), 400
+        return jsonify({"error": "Un observateur ne peut pas se voir assigner une tâche"}), 400
 
     for uid in assignee_ids:
         db.session.execute(
@@ -234,6 +244,7 @@ def get_tasks(project_id):
     )
     tasks_page = (
         Task.query.filter_by(project_id=project_id, parent_id=None)
+        .options(joinedload(Task.assignees))
         .order_by(Task.updated_at.desc())
         .paginate(page=page, per_page=per_page, error_out=False)
     )
@@ -431,7 +442,7 @@ def update_task(task_id):
         project = Project.query.get(task.project_id)
         new_ids = list(data["assignees"])
         if new_ids and not _assignees_allowed(project, new_ids):
-            return jsonify({"error": "Un ou plusieurs assignés ne sont pas membres du projet"}), 400
+            return jsonify({"error": "Un observateur ne peut pas se voir assigner une tâche"}), 400
 
         db.session.execute(task_assignees.delete().where(task_assignees.c.task_id == task_id))
         for uid in new_ids:

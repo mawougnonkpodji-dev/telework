@@ -43,7 +43,8 @@ const STATUS_COLOR = { assigned: '#64748b', in_progress: '#3b82f6', delivered: '
 const STATUS_LABEL = { assigned: 'À faire', in_progress: 'En cours', delivered: 'Livré', validated: 'Validé', rejected: 'Rejeté', overdue: 'En retard' };
 
 // ── Composant principal ───────────────────────────────────────────────────────
-export default function ReportsPanel({ projectId }) {
+export default function ReportsPanel({ projectId, myRole }) {
+  const isObservateur = myRole === 'observateur';
   const [loading,     setLoading]     = useState(false);
   const [dashboard,   setDashboard]   = useState(null);
   const [burndown,    setBurndown]    = useState(null);
@@ -193,25 +194,29 @@ export default function ReportsPanel({ projectId }) {
             Actualiser
           </button>
 
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            disabled={!projectId || exportingCsv}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.25)', color: '#06b6d4', fontSize: '12px', cursor: projectId ? 'pointer' : 'not-allowed' }}
-          >
-            {exportingCsv ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={13} />}
-            CSV
-          </button>
+          {!isObservateur && (
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={!projectId || exportingCsv}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.25)', color: '#06b6d4', fontSize: '12px', cursor: projectId ? 'pointer' : 'not-allowed' }}
+            >
+              {exportingCsv ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={13} />}
+              CSV
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={handleExportPdf}
-            disabled={!projectId || exportingPdf}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', fontSize: '12px', cursor: projectId ? 'pointer' : 'not-allowed' }}
-          >
-            {exportingPdf ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <FileText size={13} />}
-            PDF
-          </button>
+          {!isObservateur && (
+            <button
+              type="button"
+              onClick={handleExportPdf}
+              disabled={!projectId || exportingPdf}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', fontSize: '12px', cursor: projectId ? 'pointer' : 'not-allowed' }}
+            >
+              {exportingPdf ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <FileText size={13} />}
+              PDF
+            </button>
+          )}
         </div>
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { Calendar, AlertCircle, Pencil, Trash2, Plus, Send, Upload, Link, Play, Timer, FileText, Eye, Download, Lock, MessageSquare } from 'lucide-react';
+import { Calendar, AlertCircle, Pencil, Trash2, Plus, Send, Upload, Link, Play, Timer, Eye, Download, Lock, MessageSquare } from 'lucide-react';
 import TaskModal from './TaskModal';
 import TaskDetailPanel from './TaskDetailPanel';
 import { checkDependencyMet } from '../utils/taskHelpers';
@@ -33,7 +33,6 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
   const [deliverable, setDeliverable] = useState('');
   const [mode, setMode] = useState('link');
   const [file, setFile] = useState(null);
-  const [reportContent, setReportContent] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
 
@@ -66,13 +65,6 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
             color: mode === 'file' ? '#fff' : '#6b7280', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
           }}>
             <Upload size={14} style={{marginRight: 6}}/>Fichier
-          </button>
-          <button onClick={() => setMode('report')} style={{
-            flex: 1, padding: '10px', borderRadius: '10px', border: 'none',
-            background: mode === 'report' ? '#4f46e5' : '#f3f4f6',
-            color: mode === 'report' ? '#fff' : '#6b7280', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
-          }}>
-            <FileText size={14} style={{marginRight: 6}}/>Rapport
           </button>
         </div>
 
@@ -128,18 +120,6 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
           </div>
         )}
         
-        {mode === 'report' && (
-          <textarea
-            value={reportContent}
-            onChange={e => setReportContent(e.target.value)}
-            placeholder="Entrez le contenu de votre rapport ici..."
-            style={{
-              width: '100%', minHeight: '120px', padding: '14px', borderRadius: '12px',
-              border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none',
-              marginBottom: '16px', boxSizing: 'border-box', resize: 'vertical'
-            }}
-          />
-        )}
         
           <div style={{ display: 'flex', gap: '12px' }}>
             <button onClick={onClose} style={{ flex: 1, padding: '14px', borderRadius: '12px', background: '#f3f4f6', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Annuler</button>
@@ -152,9 +132,6 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                 } else if (mode === 'file') {
                   deliverableValue = file
                   deliverableType = 'fichier'
-                } else if (mode === 'report') {
-                  deliverableValue = reportContent
-                  deliverableType = 'rapport'
                 }
                 
                 try {
@@ -163,7 +140,6 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                   await onSubmit(task?.id, deliverableValue, deliverableType)
                   setDeliverable('')
                   setFile(null)
-                  setReportContent('')
                   setUploadError('')
                   onClose()
                 } catch (err) {
@@ -172,18 +148,16 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                   setUploading(false)
                 }
               }}
-               disabled={uploading || !( 
+               disabled={uploading || !(
                 (mode === 'link' && deliverable.trim()) ||
-                (mode === 'file' && file) ||
-                (mode === 'report' && reportContent.trim())
+                (mode === 'file' && file)
               )} style={{
                 flex: 1, padding: '14px', borderRadius: '12px',
                 background: uploading ? 'var(--c-text4)' : '#4f46e5', border: 'none', color: '#fff', cursor: 'pointer',
-                fontWeight: '600', opacity: ( 
+                fontWeight: '600', opacity: (
                   uploading || !(
                   (mode === 'link' && deliverable.trim()) ||
-                  (mode === 'file' && file) ||
-                  (mode === 'report' && reportContent.trim())
+                  (mode === 'file' && file)
                 ) ? 0.5 : 1
                 )
               }}>Livrer</button>
@@ -672,7 +646,7 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
            }}
            task={editingTask}
            project={activeProject}
-           teamMembers={teamMembers?.map(m => ({ id: m.id, name: m.nom || m.name, role: m.role })) || []}
+           teamMembers={teamMembers?.filter(m => m.role !== 'observateur').map(m => ({ id: m.id, name: m.nom || m.name, role: m.role })) || []}
            allTasks={allTasks}
            mode={editingTask ? 'edit' : 'create'}
          />

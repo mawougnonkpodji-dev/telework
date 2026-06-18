@@ -30,6 +30,9 @@ class Project(db.Model):
     description = db.Column(db.Text)
     owner_id    = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     status      = db.Column(Enum(ProjectStatus), default=ProjectStatus.active)
+    color_theme = db.Column(db.String(20),  default="#22d3ee")
+    icon        = db.Column(db.String(10),  default="📁")
+    slug        = db.Column(db.String(10),  nullable=True)
     created_at  = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     updated_at  = db.Column(db.DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 
@@ -47,6 +50,10 @@ class Project(db.Model):
             "description": self.description,
             "owner_id":    self.owner_id,
             "status":      self.status.value,
+            "color_theme": self.color_theme or "#22d3ee",
+            "icon":        self.icon or "📁",
+            "slug":        self.slug or (self.name.upper().replace(" ", "")[:3] if self.name else "PRJ"),
+            "task_count":  self.tasks.count() if self.tasks else 0,
             "created_at":  self.created_at.isoformat(),
             "updated_at":  self.updated_at.isoformat(),
         }

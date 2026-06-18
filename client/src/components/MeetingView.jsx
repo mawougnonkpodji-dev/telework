@@ -60,7 +60,7 @@ function MeetingMascotte({ label }) {
 /* ── Rendu d'un message avec @mentions en surbrillance ── */
 function MessageContent({ content }) {
   if (!content) return null;
-  const parts = content.split(/(@[\w][\w\s]*)/g);
+  const parts = content.split(/(@\w[\w\s]*)/g);
   return (
     <>
       {parts.map((part, i) =>
@@ -202,6 +202,7 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
             </div>
             <div className="messages-area">
               {messages.map(msg => {
+                console.log("CHANNEL msg:", msg.id, msg.created_at);
                 const sid = msg.sender?.id ?? msg.sender_id;
                 const name = msg.sender?.name || 'Membre';
                 const own = Number(sid) === Number(user?.id);
@@ -369,6 +370,7 @@ function DMPanel({ user, target, onClose }) {
       ) : (
         <div className="messages-area">
           {messages.map(msg => {
+            console.log("DM msg:", msg.id, msg.created_at);
             const sid = msg.sender?.id ?? msg.sender_id;
             const name = msg.sender?.name || (Number(sid) === Number(target.id) ? (target.name || target.email) : 'Moi');
             const own = Number(sid) === Number(user?.id);

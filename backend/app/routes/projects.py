@@ -1,7 +1,10 @@
+import re
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.extensions import db
+from sqlalchemy.orm import joinedload
+from app.extensions import db, cache
 from app.models import Project, User
+from app.models.user import Role
 from app.models.project import project_members, MemberRole
 from app.services.board_service import seed_default_board
 
@@ -18,10 +21,16 @@ def create_project():
     if not data.get("name"):
         return jsonify({"error": "Le nom du projet est requis"}), 400
 
+    raw_name = data["name"]
+    auto_slug = re.sub(r'[^A-Z]', '', raw_name.upper())[:3].ljust(3, 'X')
+
     project = Project(
-        name        = data["name"],
+        name        = raw_name,
         description = data.get("description", ""),
-        owner_id    = user_id
+        owner_id    = user_id,
+        color_theme = data.get("color_theme", "#22d3ee"),
+        icon        = data.get("icon", "📁"),
+        slug        = data.get("slug", auto_slug),
     )
     db.session.add(project)
     db.session.flush()  # pour obtenir project.id avant commit
@@ -42,11 +51,18 @@ def create_project():
             project_id = project.id,
             role       = MemberRole.admin,
         ))
+    # Le créateur devient gestionnaire (admin) dans la table users
+    creator = db.session.get(User, user_id)
+    if creator and creator.role != Role.admin:
+        creator.role = Role.admin
+
     seed_default_board(project.id)
     db.session.commit()
+    cache.delete(f"projects_{user_id}")
 
     return jsonify({
         "message": "Projet créé avec succès",
+        "user":    creator.to_dict(),
         "project": project.to_dict()
     }), 201
 
@@ -99,6 +115,7 @@ def create_projects_batch():
 # ─── LISTER MES PROJETS ───────────────────────────────────────────────────────
 @projects_bp.route("/", methods=["GET"])
 @jwt_required()
+@cache.cached(timeout=30, key_prefix=lambda: f"projects_{get_jwt_identity()}")
 def get_projects():
     user_id = int(get_jwt_identity())
     user    = User.query.get(user_id)
@@ -120,7 +137,7 @@ def get_projects():
 @jwt_required()
 def get_project(project_id):
     user_id = int(get_jwt_identity())
-    project = Project.query.get_or_404(project_id)
+    project = Project.query.options(joinedload(Project.members)).get_or_404(project_id)
 
     # Vérifier que l'utilisateur est membre
     if not _is_member(user_id, project):
@@ -147,6 +164,7 @@ def update_project(project_id):
     if "status"      in data: project.status      = data["status"]
 
     db.session.commit()
+    cache.delete(f"projects_{user_id}")
     return jsonify({"message": "Projet mis à jour", "project": project.to_dict()}), 200
 
 

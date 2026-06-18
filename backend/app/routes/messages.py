@@ -12,10 +12,12 @@ from app.models.message import (
     DirectConversation,
     MessageMention,
     MessageReaction,
+    _iso,
 )
 from app.utils.project_access import is_project_member
 from app.utils.project_access import can_edit_project, can_manage_project
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 from app.services.attachment_service import save_uploaded_file_in_subdir, delete_stored_file
 from app.services.notification_service import send_notification
 
@@ -271,7 +273,9 @@ def get_messages(project_id):
     light = request.args.get("light", "false").lower() == "true"
     channel_id = request.args.get("channel_id", type=int)
 
-    messages_query = Message.query.filter(Message.project_id == project_id, Message.direct_conversation_id.is_(None))
+    messages_query = Message.query.filter(
+        Message.project_id == project_id, Message.direct_conversation_id.is_(None)
+    ).options(joinedload(Message.sender))
     if channel_id:
         channel = ChatChannel.query.filter_by(id=channel_id, project_id=project_id).first()
         if not channel:
@@ -371,7 +375,7 @@ def list_dm_conversations():
             },
             "last_message": {
                 "content": last_msg.content if last_msg else None,
-                "created_at": last_msg.created_at.isoformat() if last_msg else None,
+                "created_at": _iso(last_msg.created_at) if last_msg else None,
                 "sender_id": last_msg.sender_id if last_msg else None,
             } if last_msg else None,
         })
@@ -528,7 +532,7 @@ def _format_channel(channel):
         "name": channel.name,
         "is_default": channel.is_default,
         "created_by_id": channel.created_by_id,
-        "created_at": channel.created_at.isoformat(),
+        "created_at": _iso(channel.created_at),
     }
 
 
@@ -539,7 +543,7 @@ def _format_message(m, light=False):
         "project_id": m.project_id,
         "channel_id": m.channel_id,
         "direct_conversation_id": m.direct_conversation_id,
-        "created_at": m.created_at.isoformat()
+        "created_at": _iso(m.created_at)
     }
     if light:
         base["sender_id"] = m.sender.id if m.sender else None

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { 
-  X, Calendar, User, Hash, Link2, FileText, Upload, 
-  Check, ChevronDown, Search, Zap, Clock, Folder, Lock
+import {
+  X, Calendar, User, Hash,
+  Check, ChevronDown, Search, Zap, Clock, Folder, Lock, FileText
 } from 'lucide-react';
 
 const XP_OPTIONS = [
@@ -9,13 +9,6 @@ const XP_OPTIONS = [
   { value: 30, label: 'Moyen', color: '#22d3ee' },
   { value: 60, label: 'Difficile', color: '#22d3ee' },
   { value: 100, label: 'Critique', color: '#22d3ee' }
-];
-
-const DELIVERABLE_TYPES = [
-  { value: 'aucun', label: 'Aucun', icon: null },
-  { value: 'url', label: 'URL', icon: Link2 },
-  { value: 'fichier', label: 'Fichier', icon: Upload },
-  { value: 'rapport', label: 'Rapport', icon: FileText }
 ];
 
 function formatTimeRemaining(deadline) {
@@ -50,7 +43,6 @@ export default function TaskModal({
     xp: 30,
     deadline: '',
     assignee_id: null,
-    deliverable_type: 'aucun',
     dependency_id: ''
   });
   
@@ -88,8 +80,7 @@ useEffect(() => {
           xp: 30,
           deadline: '',
           assignee_id: null,
-          deliverable_type: 'aucun',
-          dependency_id: ''
+                dependency_id: ''
         });
       }
       setErrors({});
@@ -147,7 +138,6 @@ useEffect(() => {
         due_date: form.deadline,
         deadline: form.deadline,
         assignee_id: form.assignee_id,
-        deliverable_type: form.deliverable_type,
         project_id: project?.id,
         column_name: 'todo',
         dependency_id: form.dependency_id || null
@@ -336,30 +326,6 @@ useEffect(() => {
               </div>
             </div>
             
-            <div className="task-form-group">
-              <label className="task-label">
-                <Link2 size={12} />
-                Type de Livrable
-              </label>
-              <div className="deliverable-toggle">
-                {DELIVERABLE_TYPES.map((type) => (
-                  <button
-                    key={type.value}
-                    type="button"
-                    className={`deliverable-option ${form.deliverable_type === type.value ? 'active' : ''}`}
-                    onClick={() => setForm({ ...form, deliverable_type: type.value })}
-                  >
-                    {type.icon && <type.icon size={14} />}
-                    <span>{type.label}</span>
-                  </button>
-                ))}
-              </div>
-              {form.deliverable_type === 'aucun' && (
-                <div className="deliverable-note">
-                  Le membre peut valider sans preuve
-                </div>
-              )}
-            </div>
             
             {/* Dépendance */}
             <div className="task-form-group">
@@ -833,45 +799,6 @@ useEffect(() => {
           font-size: 13px;
         }
         
-        .deliverable-toggle {
-          display: flex;
-          gap: 6px;
-        }
-        
-        .deliverable-option {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 6px;
-          padding: 12px 8px;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 10px;
-          color: #64748b;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .deliverable-option:hover {
-          background: rgba(255, 255, 255, 0.06);
-          border-color: rgba(255, 255, 255, 0.15);
-        }
-        
-        .deliverable-option.active {
-          background: rgba(99, 102, 241, 0.2);
-          border-color: #6366f1;
-          color: #fff;
-        }
-        
-        .deliverable-note {
-          font-size: 11px;
-          color: #64748b;
-          margin-top: 8px;
-          text-align: center;
-          font-style: italic;
-        }
         
         .task-modal-footer {
           display: flex;

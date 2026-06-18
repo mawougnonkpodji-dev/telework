@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Hexagon, Mail, Lock, User, Users, ArrowRight, AlertCircle, Sparkles, Gift } from 'lucide-react';
+import { Hexagon, Mail, Lock, User, ArrowRight, AlertCircle, Sparkles, Gift } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getApiUrl } from '../utils/apiHelpers.js';
 
@@ -18,8 +18,6 @@ export default function AuthPage() {
   const [nom, setNom] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [teamName, setTeamName] = useState('');
-  const [isCreatingTeam, setIsCreatingTeam] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -72,7 +70,7 @@ export default function AuthPage() {
       if (requires2FA) {
         result = await verify2FA(pendingUserId, otp);
       } else if (isRegister) {
-        result = await register(nom, email, password, teamName, isCreatingTeam);
+        result = await register(nom, email, password);
       } else {
         result = await login(email, password);
       }
@@ -231,39 +229,6 @@ export default function AuthPage() {
                 </div>
               )}
 
-              {/* Team creation — hidden when coming from an invitation */}
-              {isRegister && !requires2FA && !inviteToken && (
-                <div className="form-group team-group">
-                  <label>
-                    <Users size={16} />
-                    <span>Nom de l'équipe</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Alpha Team"
-                    value={teamName}
-                    onChange={(e) => {
-                      setTeamName(e.target.value);
-                      if (e.target.value && !isCreatingTeam) {
-                        setIsCreatingTeam(true);
-                      }
-                    }}
-                  />
-                  <div className="team-toggle">
-                    <label className="toggle-label">
-                      <input
-                        type="checkbox"
-                        checked={isCreatingTeam}
-                        onChange={(e) => {
-                          e.stopPropagation();
-                          setIsCreatingTeam(e.target.checked);
-                        }}
-                      />
-                      <span>Créer une nouvelle équipe</span>
-                    </label>
-                  </div>
-                </div>
-              )}
 
               <button 
                 type="submit" 

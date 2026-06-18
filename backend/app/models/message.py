@@ -1,5 +1,16 @@
 from app.extensions import db
-from datetime import datetime, timezone
+from datetime import datetime
+
+def now_local():
+    # retourne l'heure locale de la machine (serveur)
+    return datetime.now()
+
+
+def _iso(dt):
+    """Retourne une chaîne ISO-8601 avec heure du système."""
+    if dt is None:
+        return None
+    return dt.strftime('%Y-%m-%dT%H:%M:%S')
 
 
 class ChatChannel(db.Model):
@@ -10,7 +21,8 @@ class ChatChannel(db.Model):
     name = db.Column(db.String(120), nullable=False)
     is_default = db.Column(db.Boolean, default=False)
     created_by_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=now_local)
+    updated_at = db.Column(db.DateTime, default=now_local, onupdate=now_local)
 
     project = db.relationship("Project", backref=db.backref("chat_channels", lazy="dynamic", cascade="all, delete-orphan"))
     created_by = db.relationship("User", backref="created_channels")
@@ -26,7 +38,8 @@ class DirectConversation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_one_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     user_two_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=now_local)
+    updated_at = db.Column(db.DateTime, default=now_local, onupdate=now_local)
 
     user_one = db.relationship("User", foreign_keys=[user_one_id], backref="direct_conversations_started")
     user_two = db.relationship("User", foreign_keys=[user_two_id], backref="direct_conversations_received")
@@ -48,8 +61,8 @@ class Message(db.Model):
     )
     sender_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
-    updated_at = db.Column(db.DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=now_local)
+    updated_at = db.Column(db.DateTime, default=now_local, onupdate=now_local)
 
     sender = db.relationship("User", backref="messages")
     channel = db.relationship("ChatChannel", backref=db.backref("messages", lazy="dynamic"))
@@ -83,8 +96,8 @@ class Message(db.Model):
                 {"emoji": reaction.emoji, "user_id": reaction.user_id}
                 for reaction in self.reactions
             ],
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "created_at": _iso(self.created_at),
+            "updated_at": _iso(self.updated_at),
         }
 
 
@@ -94,7 +107,7 @@ class MessageMention(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     message_id = db.Column(db.Integer, db.ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=now_local)
 
     message = db.relationship("Message", backref=db.backref("mentions", lazy="dynamic", cascade="all, delete-orphan"))
     user = db.relationship("User", backref="message_mentions")
@@ -111,7 +124,7 @@ class MessageReaction(db.Model):
     message_id = db.Column(db.Integer, db.ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     emoji = db.Column(db.String(32), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    created_at = db.Column(db.DateTime, default=now_local)
 
     message = db.relationship("Message", backref=db.backref("reactions", lazy="dynamic", cascade="all, delete-orphan"))
     user = db.relationship("User", backref="message_reactions")
@@ -126,5 +139,5 @@ class MessageReaction(db.Model):
             "message_id": self.message_id,
             "user_id": self.user_id,
             "emoji": self.emoji,
-            "created_at": self.created_at.isoformat(),
+            "created_at": _iso(self.created_at),
         }

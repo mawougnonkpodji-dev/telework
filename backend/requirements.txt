@@ -11,6 +11,9 @@ python-dotenv
 psycopg2-binary
 eventlet
 flask-limiter
+flask-compress
+flask-caching
+gunicorn
 reportlab
 apscheduler
 pytest

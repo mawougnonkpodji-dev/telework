@@ -3,13 +3,14 @@ import os
 from flask import Flask, jsonify
 from sqlalchemy.exc import OperationalError, DisconnectionError
 
-from .extensions import db, migrate, jwt, socketio, cors, limiter
+from .extensions import db, migrate, jwt, socketio, cors, limiter, cache
 from .config import config
 from .routes.messages import messages_bp
 from .routes.health import health_bp
 from .services.audit_service import log_audit_event
 from .services.socket_service import register_socket_events
 from .services.scheduler_service import start_scheduler
+from flask_compress import Compress
 
 
 def create_app(env="development"):
@@ -24,6 +25,11 @@ def create_app(env="development"):
     cors.init_app(app, resources={r"/api/*": {"origins": "*"}})
     socketio.init_app(app, cors_allowed_origins="*", async_mode="eventlet")
     limiter.init_app(app)
+    Compress(app)
+    cache.init_app(app, config={
+        "CACHE_TYPE": "SimpleCache",
+        "CACHE_DEFAULT_TIMEOUT": 30,
+    })
 
     # ↓ INDISPENSABLE — importe tous les modèles ici
     from .models import (

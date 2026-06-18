@@ -333,8 +333,13 @@ export default function ProjectChatPanel({
           const mine = Number(m.sender?.id || m.sender_id) === Number(user?.id);
           return (
             <div key={m.id} style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '92%', background: mine ? 'rgba(79,70,229,0.35)' : 'rgba(30,41,59,0.9)', border: '1px solid var(--c-border)', borderRadius: '12px', padding: '8px 10px' }}>
-              <div style={{ fontSize: '11px', color: 'var(--c-text3)', marginBottom: '4px' }}>
-                {m.sender?.name || 'Membre'}
+              <div style={{ fontSize: '11px', color: 'var(--c-text3)', marginBottom: '4px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span>{m.sender?.name || 'Membre'}</span>
+                {m.created_at && (
+                  <span style={{ color: 'var(--c-text5)', fontVariantNumeric: 'tabular-nums' }}>
+                    {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: '13px', color: 'var(--c-text)', whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: '1.5' }}>
                 <MessageContent content={m.content} mentions={m.mentions} />
