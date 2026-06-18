@@ -17,3 +17,4 @@ gunicorn==26.0.0
 reportlab
 apscheduler
 pytest
+joblib
