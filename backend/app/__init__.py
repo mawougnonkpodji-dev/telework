@@ -22,8 +22,8 @@ def create_app(env="development"):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    cors.init_app(app, resources={r"/api/*": {"origins": "*"}})
-    socketio.init_app(app, cors_allowed_origins="*", async_mode="eventlet")
+    cors.init_app(app, resources={r"/api/*": {"origins": os.environ.get("CORS_ORIGINS", "*").split(",")}})
+    socketio.init_app(app, cors_allowed_origins=os.environ.get("CORS_ORIGINS", "*"), async_mode="eventlet")
     limiter.init_app(app)
     Compress(app)
     cache.init_app(app, config={
