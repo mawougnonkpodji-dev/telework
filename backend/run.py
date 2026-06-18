@@ -10,10 +10,16 @@ load_dotenv()
 
 app = create_app(os.getenv("FLASK_ENV", "development"))
 
-if __name__ == "__main__":
+def main():
+    # En prod sur Railway, on utilisera PORT, sinon 3001 en local
+    port = int(os.getenv("PORT", 3001))
     socketio.run(
         app,
+        host="0.0.0.0",
+        port=port,
         debug=False,
-        port=3001,
         use_reloader=False,
     )
+
+if __name__ == "__main__":
+    main()
