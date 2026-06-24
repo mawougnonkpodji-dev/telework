@@ -247,9 +247,21 @@ export async function deleteChannel(projectId, channelId) {
   return data;
 }
 
-export async function fetchProjectTasksKanban(projectId, perPage = 200) {
+export async function fetchProjectTasksKanban(projectId, perPage = 200, light = false) {
+  const qs = new URLSearchParams({ per_page: String(perPage) });
+  if (light) qs.set('light', 'true');
   const res = await fetch(
-    `${url(`/api/tasks/project/${projectId}`)}?per_page=${perPage}`,
+    `${url(`/api/tasks/project/${projectId}`)}?${qs}`,
+    { headers: authJsonHeaders() }
+  );
+  if (!res.ok) return null;
+  return res.json();
+}
+
+/** Livrables projet (GET /api/tasks/project/:id/deliverables) — une requête. */
+export async function listProjectDeliverables(projectId, limit = 50) {
+  const res = await fetch(
+    `${url(`/api/tasks/project/${projectId}/deliverables`)}?limit=${limit}`,
     { headers: authJsonHeaders() }
   );
   if (!res.ok) return null;

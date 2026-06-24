@@ -217,7 +217,7 @@ def velocity(project_id):
                 "velocity_percent": round((completed / planned * 100) if planned else 0, 1),
             }
         )
-    return jsonify({"velocity": rows}), 200
+    return jsonify({"velocity": rows, "has_sprints": len(sprints) > 0}), 200
 
 
 @reports_bp.route("/projects/<int:project_id>/calendar", methods=["GET"])

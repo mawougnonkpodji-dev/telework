@@ -8,7 +8,7 @@ const EMOJI_LIST = [
 ];
 
 import { getApiUrl, authJsonHeaders } from '../utils/apiHelpers.js';
-import { getAuthSocket, joinProjectRoom, leaveProjectRoom } from '../utils/socket.js';
+import { getAuthSocket } from '../utils/socket.js';
 
 const API = getApiUrl();
 
@@ -88,22 +88,21 @@ export default function ProjectChatPanel({
 
   // ── Chargement canaux / messages ──────────────────────────────────────────
   const loadChannels = useCallback(async () => {
-    if (!projectId) { setChannels([]); return; }
+    if (!projectId) return { list: [], firstId: null };
     const res  = await fetch(`${API}/api/messages/channels/${projectId}`, { headers: authJsonHeaders() });
-    if (!res.ok) { setChannels([]); return; }
+    if (!res.ok) return { list: [], firstId: null };
     const data = await res.json();
     const list = data.channels || [];
-    setChannels(list);
-    if (list.length > 0)
-      setChannelId((prev) => (prev && list.some((c) => c.id === prev) ? prev : list[0].id));
-    else
-      setChannelId(null);
-  }, [projectId]);
+    const firstId = list.length
+      ? (channelId && list.some((c) => c.id === channelId) ? channelId : list[0].id)
+      : null;
+    return { list, firstId };
+  }, [projectId, channelId]);
 
-  const loadMessages = useCallback(async () => {
+  const loadMessages = useCallback(async (targetChannelId = channelId) => {
     if (!projectId) { setMessages([]); return; }
     const qs = new URLSearchParams({ per_page: '100', page: '1' });
-    if (channelId) qs.set('channel_id', String(channelId));
+    if (targetChannelId) qs.set('channel_id', String(targetChannelId));
     const res  = await fetch(`${API}/api/messages/project/${projectId}?${qs}`, { headers: authJsonHeaders() });
     if (!res.ok) { setMessages([]); setError('Impossible de charger les messages'); return; }
     const data = await res.json();
@@ -114,14 +113,28 @@ export default function ProjectChatPanel({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (!projectId) {
+        setChannels([]);
+        setChannelId(null);
+        setMessages([]);
+        setLoading(false);
+        return;
+      }
       setLoading(true);
-      await loadChannels();
+      const { list, firstId } = await loadChannels();
+      if (cancelled) return;
+      setChannels(list);
+      setChannelId(firstId);
+      if (firstId != null) await loadMessages(firstId);
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [loadChannels]);
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { loadMessages(); }, [loadMessages]);
+  const selectChannel = useCallback((id) => {
+    setChannelId(id);
+    loadMessages(id);
+  }, [loadMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -130,7 +143,6 @@ export default function ProjectChatPanel({
   // ── Socket temps réel ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!projectId) return undefined;
-    joinProjectRoom(projectId);
     const s = getAuthSocket();
     if (!s) return undefined;
 
@@ -148,7 +160,6 @@ export default function ProjectChatPanel({
     return () => {
       s.off('new_message', onNew);
       s.off('error', onErr);
-      leaveProjectRoom(projectId);
     };
   }, [projectId, channelId]);
 
@@ -263,7 +274,8 @@ export default function ProjectChatPanel({
     if (!res.ok) { setError(data.error || `Erreur ${res.status}`); return; }
     setChannelName('');
     setShowCreate(false);
-    await loadChannels();
+    const { list } = await loadChannels();
+    setChannels(list);
     setChannelId(data.id);
 
     if (selectedMembers.length > 0) {
@@ -276,8 +288,8 @@ export default function ProjectChatPanel({
         }),
       });
       setSelectedMembers([]);
-      await loadMessages();
     }
+    await loadMessages(data.id);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -316,7 +328,7 @@ export default function ProjectChatPanel({
       {channels.length > 0 && (
         <div style={{ padding: '8px 10px', borderBottom: '1px solid rgba(148,163,184,0.1)', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           {channels.map((c) => (
-            <button key={c.id} type="button" onClick={() => setChannelId(c.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '8px', border: channelId === c.id ? '1px solid #22d3ee' : '1px solid transparent', background: channelId === c.id ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: 'var(--c-text2)', fontSize: '12px', cursor: 'pointer' }}>
+            <button key={c.id} type="button" onClick={() => selectChannel(c.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 10px', borderRadius: '8px', border: channelId === c.id ? '1px solid #22d3ee' : '1px solid transparent', background: channelId === c.id ? 'rgba(34,211,238,0.12)' : 'rgba(255,255,255,0.04)', color: 'var(--c-text2)', fontSize: '12px', cursor: 'pointer' }}>
               <Hash size={12} /> {c.name}
             </button>
           ))}

@@ -126,6 +126,7 @@ def _task_light_dict(task):
         "deadline": task.deadline.isoformat() if task.deadline else None,
         "column_id": task.column_id,
         "assignees": [u.id for u in task.assignees],
+        "sprint_id": task.sprint_id,
         "updated_at": task.updated_at.isoformat() if task.updated_at else None,
     }
 

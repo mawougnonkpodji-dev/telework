@@ -9,5 +9,16 @@ export default defineConfig({
   },
   server: {
     port: 5173
-  }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/recharts')) return 'recharts';
+          if (id.includes('node_modules/reactflow') || id.includes('node_modules/@reactflow')) return 'reactflow';
+          if (id.includes('node_modules/socket.io-client')) return 'socket';
+        },
+      },
+    },
+  },
 })

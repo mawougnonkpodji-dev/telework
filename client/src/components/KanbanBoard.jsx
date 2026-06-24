@@ -4,7 +4,7 @@ import { Calendar, AlertCircle, Pencil, Trash2, Plus, Send, Upload, Link, Play, 
 import TaskModal from './TaskModal';
 import TaskDetailPanel from './TaskDetailPanel';
 import { checkDependencyMet } from '../utils/taskHelpers';
-import { getApiUrl, authJsonHeaders, enrichBoardTasks, xpToPriority } from '../utils/apiHelpers.js';
+import { getApiUrl, authJsonHeaders, enrichBoardTasks } from '../utils/apiHelpers.js';
 
 const columns = [
   { id: 'todo', title: 'Todo', color: 'var(--c-text4)' },
@@ -123,30 +123,21 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
         
           <div style={{ display: 'flex', gap: '12px' }}>
             <button onClick={onClose} style={{ flex: 1, padding: '14px', borderRadius: '12px', background: '#f3f4f6', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Annuler</button>
-              <button onClick={async () => {
-                let deliverableValue = ''
-                let deliverableType = ''
+              <button onClick={() => {
+                let deliverableValue = '';
+                let deliverableType = '';
                 if (mode === 'link') {
-                  deliverableValue = deliverable
-                  deliverableType = 'url'
+                  deliverableValue = deliverable;
+                  deliverableType = 'url';
                 } else if (mode === 'file') {
-                  deliverableValue = file
-                  deliverableType = 'fichier'
+                  deliverableValue = file;
+                  deliverableType = 'fichier';
                 }
-                
-                try {
-                  setUploading(true)
-                  setUploadError('')
-                  await onSubmit(task?.id, deliverableValue, deliverableType)
-                  setDeliverable('')
-                  setFile(null)
-                  setUploadError('')
-                  onClose()
-                } catch (err) {
-                  setUploadError('Echec upload: ' + err.message)
-                } finally {
-                  setUploading(false)
-                }
+                setDeliverable('');
+                setFile(null);
+                setUploadError('');
+                onClose();
+                onSubmit(task?.id, deliverableValue, deliverableType);
               }}
                disabled={uploading || !(
                 (mode === 'link' && deliverable.trim()) ||
@@ -170,7 +161,8 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
 
  function KanbanBoard({
    tasks, projects, activeProject, onProjectChange,
-  onTaskMove, onDeleteTask, user, onTaskSubmit, teamMembers, onTasksChanged,
+  onTaskMove, onDeleteTask, user, onTaskSubmit, teamMembers,
+  onTaskStart, onTaskSave, onTaskApprove, onTaskReject,
   canManageProject = false, myRole,
  }) {
   const [showTaskForm, setShowTaskForm] = useState(false);
@@ -277,29 +269,10 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
     setTimeout(() => setPermissionHint(''), 2200);
   };
 
-  const handleStartTask = async (task) => {
-    // Vérification de la dépendance côté client
+  const handleStartTask = (task) => {
     const isAvailable = checkDependencyMet(task, allTasks);
-    if (!isAvailable) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_URL}/api/tasks/${task.id}`, {
-        method: 'PUT',
-        headers: authJsonHeaders(),
-        body: JSON.stringify({ status: 'in_progress' }),
-      });
-
-      if (response.ok) {
-        onTasksChanged?.();
-      } else {
-        const error = await response.json();
-        alert(error.error || 'Erreur lors du démarrage de la tâche');
-      }
-    } catch (error) {
-      console.error('Error starting task:', error);
-    }
+    if (!isAvailable) return;
+    onTaskStart?.(task);
   };
 
   const handleDragEnd = (result) => {
@@ -427,23 +400,13 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                {isGestionnaire && (
                <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                  <button
-                    onClick={async () => {
-                      try {
-                        const response = await fetch(`${API_URL}/api/tasks/${selectedTask.id}`, {
-                          method: 'PUT',
-                          headers: authJsonHeaders(),
-                          body: JSON.stringify({ status: 'validated' }),
-                        });
-                        if (response.ok) {
-                          onTasksChanged?.();
-                        } else {
-                          const err = await response.json().catch(() => ({}));
-                          alert('Erreur lors de l\'approbation: ' + (err.error || response.status));
-                        }
-                      } catch (e) {
-                        console.error('Erreur réseau:', e);
-                        alert('Erreur réseau');
-                      }
+                    onClick={() => {
+                      const taskId = selectedTask.id;
+                      setShowValidationModal(false);
+                      setShowRejectForm(false);
+                      setRejectComment('');
+                      setSelectedTask(null);
+                      onTaskApprove?.(taskId);
                     }}
                     style={{
                       flex: 1, padding: '14px', borderRadius: '12px', border: 'none',
@@ -484,31 +447,18 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                   />
                   <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                     <button
-                      onClick={async () => {
+                      onClick={() => {
                         if (!rejectComment.trim()) {
                           alert('Veuillez saisir un commentaire');
                           return;
                         }
-                        try {
-                          const ures = await fetch(`${API_URL}/api/tasks/${selectedTask.id}`, {
-                            method: 'PUT',
-                            headers: authJsonHeaders(),
-                            body: JSON.stringify({ status: 'rejected' }),
-                          });
-                          if (!ures.ok) {
-                            const err = await ures.json().catch(() => ({}));
-                            alert(err.error || 'Erreur lors du rejet');
-                            return;
-                          }
-                          await fetch(`${API_URL}/api/tasks/${selectedTask.id}/comments`, {
-                            method: 'POST',
-                            headers: authJsonHeaders(),
-                            body: JSON.stringify({ content: rejectComment.trim() }),
-                          });
-                          onTasksChanged?.();
-                        } catch (e) {
-                          alert('Erreur réseau');
-                        }
+                        const taskId = selectedTask.id;
+                        const comment = rejectComment.trim();
+                        setShowValidationModal(false);
+                        setShowRejectForm(false);
+                        setRejectComment('');
+                        setSelectedTask(null);
+                        onTaskReject?.(taskId, comment);
                       }}
                       style={{
                         flex: 1, padding: '10px', borderRadius: '6px', border: 'none',
@@ -592,57 +542,11 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
          <TaskModal
            isOpen={showTaskForm}
            onClose={() => { setShowTaskForm(false); setEditingTask(null); }}
-           onSubmit={async (taskData) => {
-             try {
-               const deadlineIso = taskData.deadline
-                 ? new Date(taskData.deadline).toISOString()
-                 : null;
-               const assignees = taskData.assignee_id ? [taskData.assignee_id] : [];
-               const priority = xpToPriority(taskData.xp ?? 30);
-               const basePayload = {
-                 title: taskData.title,
-                 description: taskData.description || '',
-                 deadline: deadlineIso,
-                 priority,
-                 assignees,
-               };
-               if (taskData.id && editingTask) {
-                 const res = await fetch(`${API_URL}/api/tasks/${taskData.id}`, {
-                   method: 'PUT',
-                   headers: authJsonHeaders(),
-                   body: JSON.stringify(basePayload),
-                 });
-                 if (!res.ok) console.error('Failed to update task:', await res.text());
-                else onTasksChanged?.();
-                 return;
-               }
-              const res = await fetch(`${API_URL}/api/tasks/`, {
-                 method: 'POST',
-                 headers: authJsonHeaders(),
-                 body: JSON.stringify({
-                   project_id: activeProject?.id,
-                   ...basePayload,
-                   status: 'assigned',
-                 }),
-               });
-               if (!res.ok) {
-                 console.error('Failed to create task:', await res.text());
-                 return;
-               }
-               const body = await res.json().catch(() => ({}));
-               const newId = body.task?.id;
-               const dep = taskData.dependency_id ? parseInt(taskData.dependency_id, 10) : null;
-               if (newId && dep && !Number.isNaN(dep)) {
-                 await fetch(`${API_URL}/api/tasks/${newId}/dependencies`, {
-                   method: 'POST',
-                   headers: authJsonHeaders(),
-                   body: JSON.stringify({ prerequisite_task_id: dep }),
-                 });
-               }
-              onTasksChanged?.();
-             } catch (error) {
-               console.error('Error saving task:', error);
-             }
+           onSubmit={(taskData) => {
+             const editing = editingTask;
+             setShowTaskForm(false);
+             setEditingTask(null);
+             onTaskSave?.(taskData, editing);
            }}
            task={editingTask}
            project={activeProject}
@@ -691,6 +595,7 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                               borderRadius: '16px', padding: '16px',
                               border: `1px solid ${snapshot.isDragging ? '#4f46e5' : 'rgba(255,255,255,0.08)'}`,
                               zIndex: snapshot.isDragging ? 9999 : 1,
+                              opacity: task._pending ? 0.85 : 1,
                               transform: snapshot.isDragging ? `${provided.draggableProps.style.transform} rotate(2deg)` : provided.draggableProps.style.transform,
                               cursor: 'pointer',
                             }}

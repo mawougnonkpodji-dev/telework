@@ -148,6 +148,9 @@ export default function ReportsPanel({ projectId, myRole }) {
     taux: r.velocity_percent ?? 0,
   }));
 
+  const hasSprints = velocity?.has_sprints ?? sprints.length > 0;
+  const hasAssignedTasks = velocitySeries.some((r) => r.planifié > 0);
+
   const scoringMembers = scoring?.members || [];
 
   const statusBars = [
@@ -294,7 +297,9 @@ export default function ReportsPanel({ projectId, myRole }) {
         <h3 className="report-title">Vélocité par sprint</h3>
         <div className="report-chart">
           {velocitySeries.length === 0 ? (
-            <EmptyChart label="Aucun sprint créé — créez des sprints pour visualiser la vélocité" />
+            <EmptyChart label={hasSprints ? 'Assignez des tâches aux sprints pour visualiser la vélocité' : 'Aucun sprint créé — créez des sprints pour visualiser la vélocité'} />
+          ) : !hasAssignedTasks ? (
+            <EmptyChart label="Les sprints existent mais aucune tâche n'y est assignée — utilisez l'onglet Sprints" />
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={velocitySeries}>

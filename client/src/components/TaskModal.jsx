@@ -123,37 +123,29 @@ useEffect(() => {
     return true;
   };
   
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!validateForm()) return;
-    
-    setLoading(true);
-    
-    try {
-      const taskData = {
-        title: form.title,
-        description: form.description,
-        xp: form.xp,
-        complexity: form.xp,
-        due_date: form.deadline,
-        deadline: form.deadline,
-        assignee_id: form.assignee_id,
-        project_id: project?.id,
-        column_name: 'todo',
-        dependency_id: form.dependency_id || null
-      };
-      
-      if (task?.id && mode === 'edit') {
-        taskData.id = task.id;
-      }
-      
-      await onSubmit(taskData);
-      onClose();
-    } catch (err) {
-      console.error('Error creating task:', err);
-    } finally {
-      setLoading(false);
+
+    const taskData = {
+      title: form.title,
+      description: form.description,
+      xp: form.xp,
+      complexity: form.xp,
+      due_date: form.deadline,
+      deadline: form.deadline,
+      assignee_id: form.assignee_id,
+      project_id: project?.id,
+      column_name: 'todo',
+      dependency_id: form.dependency_id || null,
+    };
+
+    if (task?.id && mode === 'edit') {
+      taskData.id = task.id;
     }
+
+    onClose();
+    onSubmit(taskData);
   };
   
   const getInitials = (name) => {

@@ -16,10 +16,9 @@ import {
   listChatAttachments,
   deleteChatAttachment,
   deleteTaskAttachment,
-  fetchProjectTasksKanban,
+  listProjectDeliverables,
   getApiUrl,
 } from '../services/backendApi.js';
-import { flattenKanbanTasks, authJsonHeaders } from '../utils/apiHelpers.js';
 
 export default function ResourceCenter({ user, projectId, myRole }) {
    const [resources, setResources] = useState([]);
@@ -56,86 +55,54 @@ export default function ResourceCenter({ user, projectId, myRole }) {
         canDelete: Boolean(user?.id && a.uploaded_by_id === user.id),
       }));
 
-      const tasksPayload = await fetchProjectTasksKanban(projectId);
-      const flat = flattenKanbanTasks(tasksPayload || {});
-      const withMaybeFiles = flat.filter((t) =>
-        ['delivered', 'validated', 'in_progress'].includes(t.status)
-      );
-      const slice = withMaybeFiles.slice(0, 50);
-
-      const livrableParts = await Promise.all(
-        slice.map(async (t) => {
-          const res = await fetch(`${getApiUrl()}/api/tasks/${t.id}`, {
-            headers: authJsonHeaders(),
-          });
-          if (!res.ok) return [];
-          const body = await res.json();
-          const td = body.task;
-          const results = [];
-
-          // ── Pièces jointes (fichiers uploadés) ──────────────────────────────
-          if (td?.attachments?.length) {
-            td.attachments.forEach((att) => {
-              results.push({
-                id: `task-${td.id}-att-${att.id}`,
-                _kind: 'task_att',
-                attachmentId: att.id,
-                taskId: td.id,
-                title: att.original_filename,
-                category: 'livrable',
-                created_at: att.created_at,
-                download_path: att.download_url,
-                url: null,
-                source_task_id: td.id,
-                source_task_title: td.title,
-              });
-            });
-          }
-
-          // ── Livrable URL (stocké dans la description) ───────────────────────
-          if (td?.description) {
-            const urlMatch = td.description.match(/^Livrable \(URL\):\s*(.+)$/m);
-            if (urlMatch) {
-              const href = urlMatch[1].trim();
-              results.push({
-                id: `task-${td.id}-url`,
-                _kind: 'task_url',
-                taskId: td.id,
-                title: href,
-                category: 'livrable',
-                created_at: td.updated_at || td.created_at,
-                download_path: null,
-                url: href,
-                source_task_id: td.id,
-                source_task_title: td.title,
-              });
-            } else if (
-              // Rapport texte : tâche livrée/validée dont la description n'est pas une URL
-              ['delivered', 'validated'].includes(td.status) &&
-              td.description.trim().length > 0 &&
-              !td.description.startsWith('http')
-            ) {
-              results.push({
-                id: `task-${td.id}-rapport`,
-                _kind: 'task_rapport',
-                taskId: td.id,
-                title: td.description.slice(0, 80) + (td.description.length > 80 ? '…' : ''),
-                category: 'livrable',
-                created_at: td.updated_at || td.created_at,
-                download_path: null,
-                url: null,
-                isRapport: true,
-                rapportContent: td.description,
-                source_task_id: td.id,
-                source_task_title: td.title,
-              });
-            }
-          }
-
-          return results;
-        })
-      );
-      const livrables = livrableParts.flat();
+      const deliverableData = await listProjectDeliverables(projectId, 50);
+      const rows = deliverableData?.deliverables || [];
+      const livrables = rows.map((row) => {
+        if (row.type === 'attachment') {
+          const att = row.attachment || {};
+          return {
+            id: `task-${row.task_id}-att-${att.id}`,
+            _kind: 'task_att',
+            attachmentId: att.id,
+            taskId: row.task_id,
+            title: att.original_filename,
+            category: 'livrable',
+            created_at: att.created_at,
+            download_path: att.download_url,
+            url: null,
+            source_task_id: row.task_id,
+            source_task_title: row.task_title,
+          };
+        }
+        if (row.type === 'url') {
+          return {
+            id: `task-${row.task_id}-url`,
+            _kind: 'task_url',
+            taskId: row.task_id,
+            title: row.url,
+            category: 'livrable',
+            created_at: row.created_at,
+            download_path: null,
+            url: row.url,
+            source_task_id: row.task_id,
+            source_task_title: row.task_title,
+          };
+        }
+        return {
+          id: `task-${row.task_id}-rapport`,
+          _kind: 'task_rapport',
+          taskId: row.task_id,
+          title: (row.content || '').slice(0, 80) + ((row.content || '').length > 80 ? '…' : ''),
+          category: 'livrable',
+          created_at: row.created_at,
+          download_path: null,
+          url: null,
+          isRapport: true,
+          rapportContent: row.content,
+          source_task_id: row.task_id,
+          source_task_title: row.task_title,
+        };
+      });
 
       setResources([...manual, ...livrables]);
     } catch (err) {

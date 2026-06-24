@@ -1,20 +1,10 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useAuth } from './contexts/AuthContext.jsx';
 import { useProject } from './contexts/ProjectContext.jsx';
 import NoProjectPrompt from './components/NoProjectPrompt';
 import KanbanBoard from './components/KanbanBoard';
-import DashboardRH from './components/DashboardRH';
 import Sidebar from './components/Sidebar';
-import ReportsPanel from './components/ReportsPanel';
-import SprintsPanel from './components/SprintsPanel';
-import TeamView from './components/TeamView';
-import SettingsView from './components/SettingsView';
-import InvitationPanel from './components/InvitationPanel';
-import ProjectChatPanel from './components/ProjectChatPanel.jsx';
-import MeetingView from './components/MeetingView.jsx';
 import GlobalSearchBar from './components/GlobalSearchBar.jsx';
-import ResourceCenter from './components/ResourceCenter';
-import TaskGraphExplorer from './components/TaskGraphExplorer';
 import ProjectSwitcherModal from './components/ProjectSwitcherModal.jsx';
 import ProjectWizard from './components/ProjectWizard.jsx';
 import NotificationBell from './components/NotificationBell.jsx';
@@ -28,12 +18,49 @@ import {
   authBearerHeaders,
   DROPPABLE_TO_TASK_STATUS,
   canManageProjectMembers,
+  xpToPriority,
 } from './utils/apiHelpers.js';
+import {
+  EMPTY_BOARD,
+  moveTaskInBoard,
+  addTaskToBoard,
+  removeTaskFromBoard,
+  replaceTaskIdInBoard,
+  patchTaskInBoard,
+  findTaskInBoard,
+} from './utils/taskHelpers.js';
+
+const DashboardRH = lazy(() => import('./components/DashboardRH'));
+const ReportsPanel = lazy(() => import('./components/ReportsPanel'));
+const SprintsPanel = lazy(() => import('./components/SprintsPanel'));
+const TeamView = lazy(() => import('./components/TeamView'));
+const SettingsView = lazy(() => import('./components/SettingsView'));
+const InvitationPanel = lazy(() => import('./components/InvitationPanel'));
+const ProjectChatPanel = lazy(() => import('./components/ProjectChatPanel.jsx'));
+const MeetingView = lazy(() => import('./components/MeetingView.jsx'));
+const ResourceCenter = lazy(() => import('./components/ResourceCenter'));
+const TaskGraphExplorer = lazy(() => import('./components/TaskGraphExplorer'));
 
 const API_URL = getApiUrl();
 
+function ViewLoader() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '240px' }}>
+      <div style={{
+        width: '32px',
+        height: '32px',
+        border: '3px solid rgba(34, 211, 238, 0.2)',
+        borderTopColor: '#22d3ee',
+        borderRadius: '50%',
+        animation: 'spin 1s linear infinite',
+      }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
 function App() {
-  const { user, token, loading, refreshUser } = useAuth();
+  const { user, token, loading, refreshUser, logout } = useAuth();
   const { setActiveProjectId } = useProject();
   const [projects, setProjects] = useState([]);
   const [activeProject, setActiveProject] = useState(null);
@@ -209,10 +236,21 @@ function App() {
 
     const handler = (data) => {
       const projId = data?.project_id;
-      if (!projId) return;
-      // Re-fetch tasks → KanbanBoard & TeamView re-render via props
-      fetchProjectTasks(projId);
-      // Window events for DashboardRH, ReportsPanel, etc.
+      const taskId = data?.task_id;
+      if (projId && taskId && data.action === 'deleted') {
+        setProjectTasks((prev) => {
+          const board = prev[projId];
+          if (!board) return prev;
+          return { ...prev, [projId]: removeTaskFromBoard(board, taskId) };
+        });
+      } else if (projId && taskId && data.action === 'created') {
+        setProjectTasks((prev) => {
+          const board = prev[projId];
+          if (board && findTaskInBoard(board, taskId)) return prev;
+          queueMicrotask(() => fetchProjectTasks(projId));
+          return prev;
+        });
+      }
       window.dispatchEvent(new CustomEvent('taskUpdated',  { detail: data }));
       if (data.action === 'created') {
         window.dispatchEvent(new CustomEvent('taskCreated', { detail: data }));
@@ -256,20 +294,8 @@ function App() {
 
   const fetchData = async () => {
     try {
-      const authToken = localStorage.getItem('auth_token');
-      const res = await fetch(`${API_URL}/api/auth/me`, {
-        headers: { 'Authorization': `Bearer ${authToken}` }
-      });
-      if (res.ok) {
-        await res.json();
-      }
-    } catch (e) {
-      console.log('Error fetching team data');
-    }
-    try {
       await fetchProjects();
     } catch (e) {
-      // Failsafe: never block the app forever on initial data loading.
       setInitialized(true);
     }
   };
@@ -319,7 +345,10 @@ function App() {
         if (projectToActivate) {
           setActiveProject(projectToActivate);
           setActiveProjectId(projectToActivate.id);
-          await fetchProjectTasks(projectToActivate.id);
+          await Promise.all([
+            fetchProjectTasks(projectToActivate.id),
+            fetchProjectMembers(projectToActivate.id),
+          ]);
         }
       } else if (!preserveOnError) {
         setProjects([]);
@@ -332,10 +361,26 @@ function App() {
     return projectsList;
   };
 
+  const fetchProjectMembers = async (projectId) => {
+    if (!projectId) return;
+    const authToken = localStorage.getItem('auth_token');
+    try {
+      const res = await fetch(`${API_URL}/api/projects/${projectId}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTeamMembers(data?.project?.members || []);
+      }
+    } catch (_) {
+      setTeamMembers([]);
+    }
+  };
+
   const fetchProjectTasks = async (projectId) => {
     const authToken = localStorage.getItem('auth_token');
     try {
-      const taskRes = await fetch(`${API_URL}/api/tasks/project/${projectId}`, {
+      const taskRes = await fetch(`${API_URL}/api/tasks/project/${projectId}?light=true`, {
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
       if (taskRes.ok) {
@@ -391,25 +436,379 @@ function App() {
     if (!projectTasks[project.id]) {
       fetchProjectTasks(project.id);
     }
+    fetchProjectMembers(project.id);
     setIsSwitcherOpen(false);
   };
+
+  const handleProjectDeleted = (projectId) => {
+    const remaining = projects.filter((p) => p.id !== projectId);
+    setProjects(remaining);
+    setProjectTasks((prev) => {
+      const next = { ...prev };
+      delete next[projectId];
+      return next;
+    });
+    if (activeProject?.id === projectId) {
+      const next = remaining[0] || null;
+      if (next) handleProjectChange(next);
+      else {
+        setActiveProject(null);
+        setActiveProjectId(null);
+        setTeamMembers([]);
+      }
+    }
+  };
+
+  const updateProjectBoard = useCallback((projectId, updater) => {
+    if (!projectId) return;
+    setProjectTasks((prev) => {
+      const board = prev[projectId] || EMPTY_BOARD;
+      const nextBoard = typeof updater === 'function' ? updater(board) : updater;
+      return { ...prev, [projectId]: nextBoard };
+    });
+  }, []);
+
+  const rollbackBoard = useCallback((projectId, snapshot) => {
+    if (!projectId || !snapshot) {
+      fetchProjectTasks(projectId);
+      return;
+    }
+    setProjectTasks((prev) => ({ ...prev, [projectId]: snapshot }));
+  }, []);
+
+  const memberLabel = useCallback((assigneeId) => {
+    const m = teamMembers.find((x) => Number(x.id) === Number(assigneeId));
+    return m?.name || m?.nom || (assigneeId ? `Utilisateur #${assigneeId}` : '—');
+  }, [teamMembers]);
+
+  const handleTaskStart = useCallback(async (task) => {
+    const pid = activeProject?.id;
+    if (!pid || !task?.id) return;
+
+    let snapshot = null;
+    setProjectTasks((prev) => {
+      snapshot = prev[pid] || EMPTY_BOARD;
+      return {
+        ...prev,
+        [pid]: moveTaskInBoard(snapshot, task.id, 'inProgress', {
+          status: 'in_progress',
+          start_time: new Date().toISOString(),
+        }),
+      };
+    });
+
+    try {
+      const res = await fetch(`${API_URL}/api/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: authJsonHeaders(),
+        body: JSON.stringify({ status: 'in_progress' }),
+      });
+      if (!res.ok) {
+        rollbackBoard(pid, snapshot);
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Erreur lors du démarrage de la tâche');
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('taskUpdated'));
+    } catch {
+      rollbackBoard(pid, snapshot);
+      alert('Erreur réseau');
+    }
+  }, [activeProject?.id, rollbackBoard]);
+
+  const handleTaskSave = useCallback(async (taskData, editingTask) => {
+    const pid = activeProject?.id;
+    if (!pid) return;
+
+    const deadlineIso = taskData.deadline
+      ? new Date(taskData.deadline).toISOString()
+      : null;
+    const assigneeId = taskData.assignee_id ? Number(taskData.assignee_id) : null;
+    const assignees = assigneeId ? [assigneeId] : [];
+    const priority = xpToPriority(taskData.xp ?? 30);
+    const basePayload = {
+      title: taskData.title,
+      description: taskData.description || '',
+      deadline: deadlineIso,
+      priority,
+      assignees,
+    };
+
+    if (taskData.id && editingTask) {
+      let snapshot = null;
+      setProjectTasks((prev) => {
+        snapshot = prev[pid] || EMPTY_BOARD;
+        return {
+          ...prev,
+          [pid]: patchTaskInBoard(snapshot, editingTask.id, {
+            ...basePayload,
+            assignee_id: assigneeId,
+            assignee_name: memberLabel(assigneeId),
+            due_date: deadlineIso,
+          }),
+        };
+      });
+
+      try {
+        const res = await fetch(`${API_URL}/api/tasks/${taskData.id}`, {
+          method: 'PUT',
+          headers: authJsonHeaders(),
+          body: JSON.stringify(basePayload),
+        });
+        if (!res.ok) {
+          rollbackBoard(pid, snapshot);
+          alert('Échec de la mise à jour de la tâche');
+          return;
+        }
+        window.dispatchEvent(new CustomEvent('taskUpdated'));
+      } catch {
+        rollbackBoard(pid, snapshot);
+        alert('Erreur réseau');
+      }
+      return;
+    }
+
+    const tempId = -Date.now();
+    const optimistic = {
+      id: tempId,
+      title: taskData.title,
+      description: taskData.description || '',
+      status: 'assigned',
+      deadline: deadlineIso,
+      due_date: deadlineIso,
+      assignee_id: assigneeId,
+      assignees,
+      assignee_name: memberLabel(assigneeId),
+      priority,
+      created_at: new Date().toISOString(),
+      _pending: true,
+    };
+
+    updateProjectBoard(pid, (b) => addTaskToBoard(b, optimistic, 'todo'));
+
+    try {
+      const res = await fetch(`${API_URL}/api/tasks/`, {
+        method: 'POST',
+        headers: authJsonHeaders(),
+        body: JSON.stringify({
+          project_id: pid,
+          ...basePayload,
+          status: 'assigned',
+        }),
+      });
+      if (!res.ok) {
+        updateProjectBoard(pid, (b) => removeTaskFromBoard(b, tempId));
+        alert('Échec de la création de la tâche');
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      const real = body.task;
+      if (!real?.id) {
+        updateProjectBoard(pid, (b) => removeTaskFromBoard(b, tempId));
+        return;
+      }
+
+      const dep = taskData.dependency_id ? parseInt(taskData.dependency_id, 10) : null;
+      if (dep && !Number.isNaN(dep)) {
+        await fetch(`${API_URL}/api/tasks/${real.id}/dependencies`, {
+          method: 'POST',
+          headers: authJsonHeaders(),
+          body: JSON.stringify({ prerequisite_task_id: dep }),
+        });
+      }
+
+      updateProjectBoard(pid, (b) =>
+        replaceTaskIdInBoard(b, tempId, {
+          ...real,
+          assignee_id: assigneeId,
+          assignee_name: memberLabel(assigneeId),
+          due_date: real.deadline || deadlineIso,
+        })
+      );
+      window.dispatchEvent(new CustomEvent('taskCreated', { detail: { task_id: real.id, project_id: pid } }));
+    } catch {
+      updateProjectBoard(pid, (b) => removeTaskFromBoard(b, tempId));
+      alert('Erreur réseau');
+    }
+  }, [activeProject?.id, memberLabel, rollbackBoard, updateProjectBoard]);
+
+  const handleTaskDeliver = useCallback((taskId, deliverable, deliverableType) => {
+    const pid = activeProject?.id;
+    if (!pid || !taskId) return;
+
+    let snapshot = null;
+    setProjectTasks((prev) => {
+      snapshot = prev[pid] || EMPTY_BOARD;
+      return {
+        ...prev,
+        [pid]: moveTaskInBoard(snapshot, taskId, 'review', { status: 'delivered' }),
+      };
+    });
+
+    (async () => {
+      try {
+        if (deliverableType === 'fichier' && deliverable instanceof File) {
+          const fd = new FormData();
+          fd.append('file', deliverable);
+          const uploadRes = await fetch(`${API_URL}/api/tasks/${taskId}/attachments`, {
+            method: 'POST',
+            headers: authBearerHeaders(),
+            body: fd,
+          });
+          if (!uploadRes.ok) {
+            const err = await uploadRes.json().catch(() => ({}));
+            throw new Error(err.error || `Upload échoué (${uploadRes.status})`);
+          }
+          const statusRes = await fetch(`${API_URL}/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: authJsonHeaders(),
+            body: JSON.stringify({ status: 'delivered' }),
+          });
+          if (!statusRes.ok) {
+            const err = await statusRes.json().catch(() => ({}));
+            throw new Error(err.error || `Mise à jour statut (${statusRes.status})`);
+          }
+        } else {
+          const text =
+            deliverableType === 'rapport'
+              ? String(deliverable || '')
+              : deliverableType === 'url'
+                ? `Livrable (URL): ${deliverable}`
+                : String(deliverable || '');
+          const ures = await fetch(`${API_URL}/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: authJsonHeaders(),
+            body: JSON.stringify({ description: text, status: 'delivered' }),
+          });
+          if (!ures.ok) {
+            const err = await ures.json().catch(() => ({}));
+            throw new Error(err.error || `Mise à jour échouée (${ures.status})`);
+          }
+        }
+        window.dispatchEvent(new CustomEvent('taskUpdated'));
+      } catch (err) {
+        rollbackBoard(pid, snapshot);
+        alert('Erreur lors de la livraison : ' + err.message);
+      }
+    })();
+  }, [activeProject?.id, rollbackBoard]);
+
+  const handleTaskApprove = useCallback(async (taskId) => {
+    const pid = activeProject?.id;
+    if (!pid || !taskId) return;
+
+    let snapshot = null;
+    setProjectTasks((prev) => {
+      snapshot = prev[pid] || EMPTY_BOARD;
+      return {
+        ...prev,
+        [pid]: moveTaskInBoard(snapshot, taskId, 'done', { status: 'validated' }),
+      };
+    });
+
+    try {
+      const res = await fetch(`${API_URL}/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: authJsonHeaders(),
+        body: JSON.stringify({ status: 'validated' }),
+      });
+      if (!res.ok) {
+        rollbackBoard(pid, snapshot);
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Erreur lors de la validation');
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('taskUpdated'));
+    } catch {
+      rollbackBoard(pid, snapshot);
+      alert('Erreur réseau');
+    }
+  }, [activeProject?.id, rollbackBoard]);
+
+  const handleTaskReject = useCallback(async (taskId, comment) => {
+    const pid = activeProject?.id;
+    if (!pid || !taskId) return;
+
+    let snapshot = null;
+    setProjectTasks((prev) => {
+      snapshot = prev[pid] || EMPTY_BOARD;
+      return {
+        ...prev,
+        [pid]: moveTaskInBoard(snapshot, taskId, 'todo', { status: 'rejected' }),
+      };
+    });
+
+    try {
+      const res = await fetch(`${API_URL}/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: authJsonHeaders(),
+        body: JSON.stringify({ status: 'rejected' }),
+      });
+      if (!res.ok) {
+        rollbackBoard(pid, snapshot);
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Erreur lors du rejet');
+        return;
+      }
+      if (comment?.trim()) {
+        await fetch(`${API_URL}/api/tasks/${taskId}/comments`, {
+          method: 'POST',
+          headers: authJsonHeaders(),
+          body: JSON.stringify({ content: comment.trim() }),
+        });
+      }
+      window.dispatchEvent(new CustomEvent('taskUpdated'));
+    } catch {
+      rollbackBoard(pid, snapshot);
+      alert('Erreur réseau');
+    }
+  }, [activeProject?.id, rollbackBoard]);
+
+  const handleTaskDelete = useCallback(async (taskId) => {
+    const pid = activeProject?.id;
+    if (!pid || !taskId) return;
+
+    let snapshot = null;
+    setProjectTasks((prev) => {
+      snapshot = prev[pid] || EMPTY_BOARD;
+      return { ...prev, [pid]: removeTaskFromBoard(snapshot, taskId) };
+    });
+
+    try {
+      const token = localStorage.getItem('auth_token');
+      const res = await fetch(`${API_URL}/api/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        rollbackBoard(pid, snapshot);
+        alert('Échec de la suppression');
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('taskDeleted', { detail: { task_id: taskId, project_id: pid } }));
+    } catch {
+      rollbackBoard(pid, snapshot);
+      alert('Erreur réseau');
+    }
+  }, [activeProject?.id, rollbackBoard]);
 
   const handleTaskMove = async (taskId, fromColumn, toColumn) => {
     const status = DROPPABLE_TO_TASK_STATUS[toColumn];
     if (!status) return;
 
-    // Mise à jour optimiste immédiate
-    setProjectTasks(prev => {
-      const newTasks = { ...prev };
-      const currentTasks = { ...(newTasks[activeProject?.id] || { todo: [], inProgress: [], review: [], done: [] }) };
-      const taskIndex = currentTasks[fromColumn]?.findIndex(t => t.id === taskId);
-      if (taskIndex !== -1 && taskIndex !== undefined) {
-        const task = currentTasks[fromColumn][taskIndex];
-        currentTasks[fromColumn] = currentTasks[fromColumn].filter((_, i) => i !== taskIndex);
-        currentTasks[toColumn] = [...(currentTasks[toColumn] || []), { ...task, column_name: toColumn }];
-        newTasks[activeProject.id] = currentTasks;
-      }
-      return newTasks;
+    const pid = activeProject?.id;
+    if (!pid) return;
+
+    let snapshot = null;
+    setProjectTasks((prev) => {
+      snapshot = prev[pid] || EMPTY_BOARD;
+      const currentTasks = { ...snapshot };
+      const taskIndex = currentTasks[fromColumn]?.findIndex((t) => t.id === taskId);
+      if (taskIndex === -1 || taskIndex === undefined) return prev;
+      const task = currentTasks[fromColumn][taskIndex];
+      currentTasks[fromColumn] = currentTasks[fromColumn].filter((_, i) => i !== taskIndex);
+      currentTasks[toColumn] = [...(currentTasks[toColumn] || []), { ...task, status, column_name: toColumn }];
+      return { ...prev, [pid]: currentTasks };
     });
 
     try {
@@ -419,13 +818,12 @@ function App() {
         body: JSON.stringify({ status }),
       });
       if (!res.ok) {
-        // Annulation : recharge l'état réel depuis le serveur
-        fetchProjectTasks(activeProject.id);
+        rollbackBoard(pid, snapshot);
         return;
       }
       window.dispatchEvent(new CustomEvent('taskUpdated'));
     } catch {
-      fetchProjectTasks(activeProject.id);
+      rollbackBoard(pid, snapshot);
     }
   };
 
@@ -502,6 +900,8 @@ function App() {
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         onSwitcherOpen={() => setIsSwitcherOpen(true)}
         isProjectAdmin={isProjectAdmin}
+        activeProject={activeProject}
+        onLogout={logout}
       />
 
       {/* ── Notification bell — fixed, always visible ── */}
@@ -520,6 +920,7 @@ function App() {
           onClose={() => setIsSwitcherOpen(false)}
           activeProject={activeProject}
           onProjectChange={handleProjectChange}
+          onProjectDeleted={handleProjectDeleted}
           projects={projects}
           onCreateProject={handleProjectCreate}
           user={user}
@@ -678,89 +1079,13 @@ function App() {
               onProjectChange={handleProjectChange}
               onProjectCreate={handleProjectCreate}
               onTaskMove={handleTaskMove}
-              onTasksChanged={() => fetchProjectTasks(activeProject?.id)}
+              onTaskStart={handleTaskStart}
+              onTaskSave={handleTaskSave}
               user={user}
-              onDeleteTask={async (taskId) => {
-                const token = localStorage.getItem('auth_token');
-                await fetch(`${API_URL}/api/tasks/${taskId}`, {
-                  method: 'DELETE',
-                  headers: { 'Authorization': `Bearer ${token}` }
-                });
-                fetchProjectTasks(activeProject?.id);
-              }}
-              onTaskSubmit={async (taskId, deliverable, deliverableType) => {
-                try {
-                  if (deliverableType === 'fichier' && deliverable instanceof File) {
-                    // 1. Upload du fichier
-                    const fd = new FormData();
-                    fd.append('file', deliverable);
-                    const uploadRes = await fetch(`${API_URL}/api/tasks/${taskId}/attachments`, {
-                      method: 'POST',
-                      headers: authBearerHeaders(),
-                      body: fd,
-                    });
-                    if (!uploadRes.ok) {
-                      const err = await uploadRes.json().catch(() => ({}));
-                      throw new Error(err.error || `Upload échoué (${uploadRes.status})`);
-                    }
-                    // 2. Passage du statut à "delivered" (obligatoire — sans ça la tâche reste in_progress)
-                    const statusRes = await fetch(`${API_URL}/api/tasks/${taskId}`, {
-                      method: 'PUT',
-                      headers: authJsonHeaders(),
-                      body: JSON.stringify({ status: 'delivered' }),
-                    });
-                    if (!statusRes.ok) {
-                      const err = await statusRes.json().catch(() => ({}));
-                      throw new Error(err.error || `Mise à jour statut (${statusRes.status})`);
-                    }
-                  } else {
-                    // Lien URL ou rapport texte : description + statut en un seul PUT
-                    const text =
-                      deliverableType === 'rapport'
-                        ? String(deliverable || '')
-                        : deliverableType === 'url'
-                          ? `Livrable (URL): ${deliverable}`
-                          : String(deliverable || '');
-                    const ures = await fetch(`${API_URL}/api/tasks/${taskId}`, {
-                      method: 'PUT',
-                      headers: authJsonHeaders(),
-                      body: JSON.stringify({ description: text, status: 'delivered' }),
-                    });
-                    if (!ures.ok) {
-                      const err = await ures.json().catch(() => ({}));
-                      throw new Error(err.error || `Mise à jour échouée (${ures.status})`);
-                    }
-                  }
-                } catch (err) {
-                  console.error('Livrable error:', err);
-                  alert('Erreur lors de la livraison : ' + err.message);
-                  return;
-                }
-                fetchData();
-              }}
-              onTaskApprove={async (taskId) => {
-                await fetch(`${API_URL}/api/tasks/${taskId}`, {
-                  method: 'PUT',
-                  headers: authJsonHeaders(),
-                  body: JSON.stringify({ status: 'validated' }),
-                });
-                fetchData();
-              }}
-              onTaskReject={async (taskId, comment) => {
-                await fetch(`${API_URL}/api/tasks/${taskId}`, {
-                  method: 'PUT',
-                  headers: authJsonHeaders(),
-                  body: JSON.stringify({ status: 'rejected' }),
-                });
-                if (comment?.trim()) {
-                  await fetch(`${API_URL}/api/tasks/${taskId}/comments`, {
-                    method: 'POST',
-                    headers: authJsonHeaders(),
-                    body: JSON.stringify({ content: comment.trim() }),
-                  });
-                }
-                fetchData();
-              }}
+              onDeleteTask={handleTaskDelete}
+              onTaskSubmit={handleTaskDeliver}
+              onTaskApprove={handleTaskApprove}
+              onTaskReject={handleTaskReject}
             />
 
             {/* ── Bulle chat flottante ── */}
@@ -780,13 +1105,15 @@ function App() {
                       to   { opacity: 1; transform: translateY(0); }
                     }
                   `}</style>
-                  <ProjectChatPanel
-                    projectId={activeProject?.id}
-                    user={user}
-                    canPost={myProjectMemberRole !== 'observateur'}
-                    canCreateChannel={isProjectAdmin}
-                    members={teamMembers}
-                  />
+                  <Suspense fallback={<ViewLoader />}>
+                    <ProjectChatPanel
+                      projectId={activeProject?.id}
+                      user={user}
+                      canPost={myProjectMemberRole !== 'observateur'}
+                      canCreateChannel={isProjectAdmin}
+                      members={teamMembers}
+                    />
+                  </Suspense>
                 </div>
               )}
               {/* Bouton bulle */}
@@ -818,29 +1145,43 @@ function App() {
         )}
 
 {currentView === 'management' && (
-           <DashboardRH />
+           <Suspense fallback={<ViewLoader />}>
+             <DashboardRH
+               projects={projects}
+               projectMembers={teamMembers}
+               activeProject={activeProject}
+             />
+           </Suspense>
          )}
 
         {currentView === 'structure-map' && (
-          <TaskGraphExplorer
-            projectId={activeProject?.id}
-            user={user}
-          />
+          <Suspense fallback={<ViewLoader />}>
+            <TaskGraphExplorer
+              projectId={activeProject?.id}
+              user={user}
+            />
+          </Suspense>
         )}
 
         {currentView === 'team' && isProjectAdmin && (
-          <TeamView
-            projectId={activeProject?.id}
-            projectTasks={projectTasks[activeProject?.id]}
-          />
+          <Suspense fallback={<ViewLoader />}>
+            <TeamView
+              projectId={activeProject?.id}
+              projectTasks={projectTasks[activeProject?.id]}
+            />
+          </Suspense>
         )}
 
         {currentView === 'reports' && (isProjectAdmin || myProjectMemberRole === 'observateur') && (
-          <ReportsPanel projectId={activeProject?.id} myRole={myProjectMemberRole} />
+          <Suspense fallback={<ViewLoader />}>
+            <ReportsPanel projectId={activeProject?.id} myRole={myProjectMemberRole} />
+          </Suspense>
         )}
 
         {currentView === 'sprints' && isProjectAdmin && (
-          <SprintsPanel projectId={activeProject?.id} isAdmin={isProjectAdmin} />
+          <Suspense fallback={<ViewLoader />}>
+            <SprintsPanel projectId={activeProject?.id} isAdmin={isProjectAdmin} />
+          </Suspense>
         )}
 
         {currentView === 'invitations' && isProjectAdmin && (
@@ -861,34 +1202,42 @@ function App() {
               padding: '24px',
               border: '1px solid rgba(148, 163, 184, 0.1)'
             }}>
-              <InvitationPanel
-                teamName={user?.teamName || 'Équipe'}
-                projectId={activeProject?.id}
-                onMembersChanged={refreshTeamMembers}
-              />
+              <Suspense fallback={<ViewLoader />}>
+                <InvitationPanel
+                  teamName={user?.teamName || 'Équipe'}
+                  projectId={activeProject?.id}
+                  onMembersChanged={refreshTeamMembers}
+                />
+              </Suspense>
             </div>
           </div>
         )}
 
         {currentView === 'meeting' && (
           <div style={{ height: '100vh' }}>
-            <MeetingView
-              projectId={activeProject?.id}
-              user={user}
-              members={teamMembers}
-              isAdmin={isProjectAdmin}
-              meetingTarget={meetingTarget}
-              onMeetingTargetConsumed={() => setMeetingTarget(null)}
-            />
+            <Suspense fallback={<ViewLoader />}>
+              <MeetingView
+                projectId={activeProject?.id}
+                user={user}
+                members={teamMembers}
+                isAdmin={isProjectAdmin}
+                meetingTarget={meetingTarget}
+                onMeetingTargetConsumed={() => setMeetingTarget(null)}
+              />
+            </Suspense>
           </div>
         )}
 
         {currentView === 'resources' && (
-          <ResourceCenter user={user} projectId={activeProject?.id} myRole={myProjectMemberRole} />
+          <Suspense fallback={<ViewLoader />}>
+            <ResourceCenter user={user} projectId={activeProject?.id} myRole={myProjectMemberRole} />
+          </Suspense>
         )}
 
         {currentView === 'settings' && (
-          <SettingsView user={user} activeProject={activeProject} myProjectRole={myProjectMemberRole} />
+          <Suspense fallback={<ViewLoader />}>
+            <SettingsView user={user} activeProject={activeProject} myProjectRole={myProjectMemberRole} />
+          </Suspense>
         )}
 
         </>}

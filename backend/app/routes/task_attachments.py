@@ -1,4 +1,5 @@
 import os
+import re
 
 from flask import current_app, jsonify, request, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -11,6 +12,80 @@ from app.services.attachment_service import save_uploaded_file, delete_stored_fi
 from app.utils.project_access import task_project_member_or_403
 
 from app.routes.tasks import tasks_bp
+
+
+@tasks_bp.route("/project/<int:project_id>/deliverables", methods=["GET"])
+@jwt_required()
+def list_project_deliverables(project_id):
+    """Livrables projet en une requête (évite N+1 côté frontend)."""
+    from app.models import Task
+    from app.models.task import TaskStatus
+    from app.utils.project_access import get_project_for_user
+
+    user_id = int(get_jwt_identity())
+    if not get_project_for_user(user_id, project_id):
+        return jsonify({"error": "Accès refusé"}), 403
+
+    limit = min(max(request.args.get("limit", 50, type=int), 1), 100)
+    statuses = (TaskStatus.delivered, TaskStatus.validated, TaskStatus.in_progress)
+    tasks = (
+        Task.query.filter(
+            Task.project_id == project_id,
+            Task.parent_id.is_(None),
+            Task.status.in_(statuses),
+        )
+        .order_by(Task.updated_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    deliverables = []
+    for task in tasks:
+        base = f"/api/tasks/{task.id}/attachments"
+        for att in task.attachments.order_by(TaskAttachment.created_at.desc()).all():
+            d = att.to_dict(download_path=f"{base}/{att.id}/file")
+            deliverables.append(
+                {
+                    "type": "attachment",
+                    "task_id": task.id,
+                    "task_title": task.title,
+                    "task_status": task.status.value,
+                    "attachment": d,
+                }
+            )
+
+        desc = (task.description or "").strip()
+        if not desc:
+            continue
+
+        url_match = re.match(r"^Livrable \(URL\):\s*(.+)$", desc, re.M)
+        if url_match:
+            deliverables.append(
+                {
+                    "type": "url",
+                    "task_id": task.id,
+                    "task_title": task.title,
+                    "task_status": task.status.value,
+                    "url": url_match.group(1).strip(),
+                    "created_at": task.updated_at.isoformat() if task.updated_at else None,
+                }
+            )
+        elif (
+            task.status in (TaskStatus.delivered, TaskStatus.validated)
+            and not desc.startswith("http")
+        ):
+            deliverables.append(
+                {
+                    "type": "rapport",
+                    "task_id": task.id,
+                    "task_title": task.title,
+                    "task_status": task.status.value,
+                    "content": desc,
+                    "created_at": task.updated_at.isoformat() if task.updated_at else None,
+                }
+            )
+
+    return jsonify({"deliverables": deliverables}), 200
 
 
 def _upload_folder():

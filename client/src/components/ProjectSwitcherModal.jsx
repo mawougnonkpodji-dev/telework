@@ -3,7 +3,7 @@ import ProjectWizard from './ProjectWizard.jsx';
 import { getApiUrl, recentProjectsFromList, searchProjectsForSwitcher } from '../services/backendApi.js';
 import { authJsonHeaders } from '../utils/apiHelpers.js';
 
-export default function ProjectSwitcherModal({ isOpen, onClose, activeProject, onProjectChange, projects, onCreateProject, user }) {
+export default function ProjectSwitcherModal({ isOpen, onClose, activeProject, onProjectChange, onProjectDeleted, projects, onCreateProject, user }) {
   const [view, setView] = useState('switcher');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -53,7 +53,8 @@ export default function ProjectSwitcherModal({ isOpen, onClose, activeProject, o
         headers: authJsonHeaders(),
       });
       if (res.ok) {
-        window.location.reload();
+        onProjectDeleted?.(projectId);
+        onClose();
       }
     } catch (e) {
       console.log('Error deleting project');

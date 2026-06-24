@@ -12,7 +12,12 @@ import {
   deleteSprint,
   assignTasksToSprint,
   fetchProjectTasksKanban,
+  fetchReportVelocity,
 } from '../services/backendApi.js';
+import { flattenKanbanTasks } from '../utils/apiHelpers.js';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+} from 'recharts';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function fmtDate(iso) {
@@ -67,6 +72,7 @@ function SprintForm({ projectId, initial, onSave, onCancel }) {
       }
     } catch (err) {
       setError(err.message || 'Erreur serveur');
+    } finally {
       setSaving(false);
     }
   };
@@ -125,7 +131,7 @@ function SprintForm({ projectId, initial, onSave, onCancel }) {
 }
 
 // ── Carte sprint ───────────────────────────────────────────────────────────────
-function SprintCard({ sprint, isAdmin, projectId, allTasks, onUpdated, onDeleted }) {
+function SprintCard({ sprint, isAdmin, projectId, allTasks, onUpdated, onDeleted, onAssigned }) {
   const [open,        setOpen]        = useState(false);
   const [editing,     setEditing]     = useState(false);
   const [detail,      setDetail]      = useState(null);
@@ -138,8 +144,8 @@ function SprintCard({ sprint, isAdmin, projectId, allTasks, onUpdated, onDeleted
 
   const status = sprintStatus(sprint);
 
-  const loadDetail = useCallback(async () => {
-    if (detail) return;
+  const loadDetail = useCallback(async (force = false) => {
+    if (detail && !force) return;
     setLoadingDetail(true);
     const d = await fetchSprintDetail(sprint.id);
     setDetail(d?.sprint || null);
@@ -168,9 +174,10 @@ function SprintCard({ sprint, isAdmin, projectId, allTasks, onUpdated, onDeleted
       await assignTasksToSprint(sprint.id, selected);
       setAssignMsg(`${selected.length} tâche(s) ajoutée(s) au sprint.`);
       setSelected([]);
-      // Rafraîchir le détail
+      setDetail(null);
       const d = await fetchSprintDetail(sprint.id);
       setDetail(d?.sprint || null);
+      onAssigned?.();
     } catch (err) {
       setAssignMsg(err.message);
     } finally {
@@ -184,7 +191,9 @@ function SprintCard({ sprint, isAdmin, projectId, allTasks, onUpdated, onDeleted
   const color  = progressColor(pct);
 
   // Tâches du projet non encore dans un sprint (ou dans ce sprint)
-  const unassigned = (allTasks || []).filter((t) => !t.sprint_id || t.sprint_id === sprint.id);
+  const unassigned = (allTasks || []).filter(
+    (t) => !t.sprint_id || Number(t.sprint_id) === Number(sprint.id)
+  );
 
   const daysLeft = Math.ceil((new Date(sprint.end_date) - new Date()) / 86400000);
 
@@ -391,6 +400,7 @@ function SprintCard({ sprint, isAdmin, projectId, allTasks, onUpdated, onDeleted
 export default function SprintsPanel({ projectId, isAdmin = false }) {
   const [sprints,     setSprints]     = useState([]);
   const [allTasks,    setAllTasks]    = useState([]);
+  const [velocity,    setVelocity]    = useState(null);
   const [loading,     setLoading]     = useState(true);
   const [showForm,    setShowForm]    = useState(false);
   const [error,       setError]       = useState('');
@@ -398,21 +408,14 @@ export default function SprintsPanel({ projectId, isAdmin = false }) {
   const load = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
-    const [spr, tasks] = await Promise.all([
+    const [spr, tasks, vel] = await Promise.all([
       fetchProjectSprints(projectId),
       fetchProjectTasksKanban(projectId, 500),
+      fetchReportVelocity(projectId),
     ]);
     setSprints(spr || []);
-    // Aplatir toutes les tâches du kanban
-    const flat = [];
-    if (tasks) {
-      for (const col of Object.values(tasks.columns || {})) {
-        for (const t of col.tasks || []) flat.push(t);
-      }
-      // Fallback: si le backend renvoie tasks.tasks directement
-      if (tasks.tasks) flat.push(...tasks.tasks);
-    }
-    setAllTasks(flat);
+    setAllTasks(flattenKanbanTasks(tasks || {}));
+    setVelocity(vel);
     setLoading(false);
   }, [projectId]);
 
@@ -422,6 +425,7 @@ export default function SprintsPanel({ projectId, isAdmin = false }) {
     setSprints((prev) => [sprint, ...prev]);
     setShowForm(false);
     setError('');
+    load();
   };
 
   const handleUpdated = (updated) => {
@@ -430,6 +434,7 @@ export default function SprintsPanel({ projectId, isAdmin = false }) {
 
   const handleDeleted = (id) => {
     setSprints((prev) => prev.filter((s) => s.id !== id));
+    load();
   };
 
   // Tri: en cours en premier, puis à venir, puis terminés
@@ -439,6 +444,15 @@ export default function SprintsPanel({ projectId, isAdmin = false }) {
   });
 
   const activeSprint = sorted.find((s) => sprintStatus(s).label === 'En cours');
+
+  const velocitySeries = (velocity?.velocity || []).map((r) => ({
+    sprint: r.sprint_name || `Sprint ${r.sprint_id}`,
+    planifié: r.planned ?? 0,
+    complété: r.completed ?? 0,
+    taux: r.velocity_percent ?? 0,
+  }));
+
+  const hasAssignedTasks = velocitySeries.some((r) => r.planifié > 0);
 
   return (
     <div style={{ padding: '24px', maxWidth: '860px', margin: '0 auto' }}>
@@ -481,6 +495,40 @@ export default function SprintsPanel({ projectId, isAdmin = false }) {
         </div>
       )}
 
+      {/* ── Graphe vélocité ── */}
+      {!loading && sprints.length > 0 && (
+        <div style={{
+          padding: '18px 20px',
+          borderRadius: '14px',
+          background: 'var(--c-surface2)',
+          border: '1px solid var(--c-border)',
+          marginBottom: '20px',
+        }}>
+          <h3 style={{ fontSize: '14px', fontWeight: '700', color: 'var(--c-text)', margin: '0 0 12px' }}>
+            Vélocité par sprint
+          </h3>
+          {!hasAssignedTasks ? (
+            <p style={{ fontSize: '12px', color: 'var(--c-text4)', margin: 0 }}>
+              Assignez des tâches à vos sprints (ci-dessous) pour alimenter ce graphique.
+            </p>
+          ) : (
+            <div style={{ height: '240px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={velocitySeries}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <XAxis dataKey="sprint" stroke="var(--c-text4)" fontSize={11} />
+                  <YAxis stroke="var(--c-text4)" fontSize={11} allowDecimals={false} />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--c-bg)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '12px' }} />
+                  <Legend />
+                  <Bar dataKey="planifié" fill="#64748b" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="complété" fill="#06b6d4" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Contenu ── */}
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '60px 0', color: 'var(--c-text4)' }}>
@@ -504,6 +552,7 @@ export default function SprintsPanel({ projectId, isAdmin = false }) {
               allTasks={allTasks}
               onUpdated={handleUpdated}
               onDeleted={handleDeleted}
+              onAssigned={load}
             />
           ))}
         </div>

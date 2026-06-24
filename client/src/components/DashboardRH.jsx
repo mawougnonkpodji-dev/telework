@@ -1,12 +1,11 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, AlertCircle, Star, Users, Loader2, RefreshCw, Receipt, Smartphone, Brain, ChevronDown, ChevronUp } from 'lucide-react';
-import { getAuthSocket, joinProjectRoom } from '../utils/socket.js';
+import { getAuthSocket } from '../utils/socket.js';
 import { useProject } from '../contexts/ProjectContext';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import {
   getApiUrl,
-  normalizeProjectsList,
   adaptReportsDashboardPayload,
   canManageProjectMembers,
   authJsonHeaders,
@@ -23,14 +22,16 @@ import MobileMoneyModal from './MobileMoneyModal.jsx';
 
 const API_URL = getApiUrl();
 
-export default function DashboardRH() {
+export default function DashboardRH({
+  projects: projectsProp = [],
+  projectMembers = [],
+  activeProject = null,
+}) {
   const { user } = useAuth();
   const { activeProjectId, setActiveProjectId } = useProject();
   const [dashboardData, setDashboardData] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
-  const [availableProjects, setAvailableProjects] = React.useState([]);
-  const [selectedProjectId, setSelectedProjectId] = React.useState(null);
-  const [projectDetail, setProjectDetail] = React.useState(null);
+  const [selectedProjectId, setSelectedProjectId] = React.useState(activeProjectId);
   const [payrollRuns, setPayrollRuns] = React.useState([]);
   const [mobileTx, setMobileTx] = React.useState([]);
   const [payrollMsg, setPayrollMsg] = React.useState('');
@@ -102,69 +103,26 @@ export default function DashboardRH() {
     return set;
   }, [mobileTx]);
 
-  // Charger la liste des projets de l'équipe
-  React.useEffect(() => {
-    console.log('[DASHBOARD] Loading projects list...');
-    const token = localStorage.getItem('auth_token');
-    fetch(`${API_URL}/api/projects/`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    .then(r => {
-      console.log('[DASHBOARD] Projects response status:', r.status);
-      return r.json();
-    })
-    .then(raw => {
-      const projects = normalizeProjectsList(raw);
-      console.log('[DASHBOARD] Projects loaded:', projects);
-      setAvailableProjects(projects);
-      // Si un activeProjectId est déjà défini et fait partie des projets, le garder
-      if (activeProjectId && projects.some(p => p.id === Number(activeProjectId))) {
-        console.log('[DASHBOARD] Using existing activeProjectId:', activeProjectId);
-        setSelectedProjectId(activeProjectId);
-      } else if (projects.length > 0) {
-        // Sinon, prendre le premier projet
-        const firstProjectId = projects[0].id;
-        console.log('[DASHBOARD] Setting first project:', firstProjectId, projects[0].name);
-        setSelectedProjectId(firstProjectId);
-        setActiveProjectId(firstProjectId);
-      } else {
-        console.log('[DASHBOARD] No projects found!');
-      }
-    })
-    .catch(err => {
-      console.error('[DASHBOARD] Failed to load projects:', err);
-      if (activeProjectId) setSelectedProjectId(activeProjectId);
-    });
-  }, []); // Only run once on mount
+  const availableProjects = projectsProp;
 
-  // Sync selectedProjectId when activeProjectId changes from outside (e.g., ProjectSwitcher)
   React.useEffect(() => {
-    if (activeProjectId && activeProjectId !== selectedProjectId) {
+    if (activeProjectId && projectsProp.some((p) => p.id === Number(activeProjectId))) {
       setSelectedProjectId(activeProjectId);
+    } else if (projectsProp.length > 0 && !selectedProjectId) {
+      setSelectedProjectId(projectsProp[0].id);
+      setActiveProjectId(projectsProp[0].id);
     }
-  }, [activeProjectId, selectedProjectId]);
+  }, [activeProjectId, projectsProp, selectedProjectId, setActiveProjectId]);
 
   React.useEffect(() => {
-    if (!selectedProjectId) {
-      setProjectDetail(null);
-      return undefined;
+    if (activeProject?.id && activeProject.id !== selectedProjectId) {
+      setSelectedProjectId(activeProject.id);
     }
-    let cancelled = false;
-    fetch(`${API_URL}/api/projects/${selectedProjectId}`, {
-      headers: authJsonHeaders(),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!cancelled && d?.project) setProjectDetail(d.project);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedProjectId]);
+  }, [activeProject?.id, selectedProjectId]);
 
   const canManagePayroll = React.useMemo(
-    () => canManageProjectMembers(user, projectDetail, projectDetail?.members),
-    [user, projectDetail],
+    () => canManageProjectMembers(user, activeProject, projectMembers),
+    [user, activeProject, projectMembers],
   );
 
   /** Load the slip map from a specific run id. Never clears the map on failure. */
@@ -247,9 +205,7 @@ export default function DashboardRH() {
   }, [selectedProjectId, canManagePayroll]);
 
   const fetchDashboardData = React.useCallback(async (projectIdToFetch = selectedProjectId) => {
-    console.log('[DASHBOARD] Fetching data for projectId:', projectIdToFetch, 'selectedProjectId:', selectedProjectId);
     if (!projectIdToFetch) {
-      console.log('[DASHBOARD] No projectId, aborting');
       setLoading(false);
       setDashboardData(null);
       return;
@@ -258,39 +214,26 @@ export default function DashboardRH() {
     setLoading(true);
     try {
       const token = localStorage.getItem('auth_token');
-      console.log('[DASHBOARD] Token:', token ? 'present' : 'MISSING');
-      const response = await fetch(`${API_URL}/api/reports/projects/${projectIdToFetch}/dashboard`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      console.log('[DASHBOARD] Response status:', response.status);
+      const response = await fetch(
+        `${API_URL}/api/reports/projects/${projectIdToFetch}/dashboard?light=true&member_limit=15`,
+        { headers: { 'Authorization': `Bearer ${token}` } }
+      );
 
       if (response.status === 404 || response.status === 204) {
-        console.log('[DASHBOARD] Project not found or empty');
         setDashboardData(null);
         setLoading(false);
         return;
       }
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[DASHBOARD] Error response:', errorText);
-        throw new Error(`Failed to fetch dashboard data: ${response.status} ${errorText}`);
+        throw new Error(`Failed to fetch dashboard data: ${response.status}`);
       }
 
       const raw = await response.json();
-      console.log('[DASHBOARD] Data received:', raw);
-
       const data = adaptReportsDashboardPayload(raw);
-      if (!data) {
-        console.log('[DASHBOARD] No summary in data, treating as empty');
-        setDashboardData(null);
-      } else {
-        console.log('[DASHBOARD] Setting dashboard data');
-        setDashboardData(data);
-      }
+      setDashboardData(data || null);
     } catch (err) {
-      console.error('[DASHBOARD] Caught error:', err);
+      console.error('Dashboard load error:', err);
       setDashboardData(null);
     } finally {
       setLoading(false);
@@ -299,17 +242,19 @@ export default function DashboardRH() {
 
   React.useEffect(() => {
     const s = getAuthSocket();
-    if (selectedProjectId) joinProjectRoom(selectedProjectId);
     fetchDashboardData();
 
+    let debounceTimer;
+    const bump = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => fetchDashboardData(), 450);
+    };
+
     const handleProjectChange = () => {
-      fetchDashboardData();
+      if (selectedProjectId) fetchDashboardData(selectedProjectId);
     };
     window.addEventListener('projectChanged', handleProjectChange);
 
-    const bump = () => {
-      fetchDashboardData();
-    };
     if (s) {
       s.on('task_changed', bump);
       s.on('new_notification', bump);
@@ -319,6 +264,7 @@ export default function DashboardRH() {
     window.addEventListener('taskDeleted', bump);
 
     return () => {
+      clearTimeout(debounceTimer);
       window.removeEventListener('projectChanged', handleProjectChange);
       if (s) {
         s.off('task_changed', bump);
@@ -1009,7 +955,7 @@ export default function DashboardRH() {
                 <table style={{ width: '100%', fontSize: '12px' }}>
                   <tbody>
                     {(slipTable.slips || []).map((s) => {
-                      const nm = projectDetail?.members?.find((m) => m.id === s.user_id)?.name;
+                      const nm = projectMembers?.find((m) => m.id === s.user_id)?.name;
                       return (
                         <tr key={s.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                           <td style={{ padding: '8px', color: 'var(--c-text2)' }}>{nm || `Utilisateur #${s.user_id}`}</td>
@@ -1059,7 +1005,7 @@ export default function DashboardRH() {
           onClose={() => setMmOpen(false)}
           projectId={selectedProjectId}
           amount={75000}
-          beneficiaries={projectDetail?.members || []}
+          beneficiaries={projectMembers || []}
           defaultBeneficiaryId={user?.id}
           onSuccess={() => {
             refreshPayrollMobile();
@@ -1075,7 +1021,7 @@ export default function DashboardRH() {
           }}
           projectId={selectedProjectId}
           amount={payMember?.slip?.net_amount ? Number(payMember.slip.net_amount) : 0}
-          beneficiaries={projectDetail?.members || []}
+          beneficiaries={projectMembers || []}
           defaultBeneficiaryId={payMember?.member?.userId || null}
           onSuccess={() => {
             // Refresh the transactions list; modal stays open (shows success screen)
