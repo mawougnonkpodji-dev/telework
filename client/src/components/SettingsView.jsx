@@ -327,8 +327,6 @@ export default function SettingsView({ user, activeProject, myProjectRole }) {
           }}
         >
           <option value="fr">Français</option>
-          <option value="en">English</option>
-          <option value="wo">Wolof</option>
         </select>
       </div>
 

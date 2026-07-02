@@ -354,64 +354,6 @@ export default function ReportsPanel({ projectId, myRole }) {
         )}
       </div>
 
-      {/* ── Performance & Scoring mensuel ── */}
-      <div className="report-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-          <h3 className="report-title" style={{ marginBottom: 0 }}>Performance mensuelle</h3>
-          {scoring?.month && (
-            <span style={{ fontSize: '11px', color: 'var(--c-text4)', background: 'var(--c-hover)', padding: '3px 8px', borderRadius: '6px', border: '1px solid var(--c-border2)' }}>
-              {scoring.month}
-            </span>
-          )}
-        </div>
-
-        {scoringMembers.length === 0 ? (
-          <p style={{ fontSize: '13px', color: 'var(--c-text4)', padding: '12px 0' }}>
-            Aucune donnée de performance — assignez et validez des tâches pour voir les scores.
-          </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {scoringMembers.map((m, i) => {
-              const score = m.score ?? 0;
-              const scoreColor = score >= 70 ? '#22c55e' : score >= 40 ? '#f59e0b' : '#f87171';
-              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
-              return (
-                <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '10px', background: i === 0 ? 'rgba(34,211,238,0.05)' : 'var(--c-hover)', border: `1px solid ${i === 0 ? 'rgba(34,211,238,0.15)' : 'var(--c-border3)'}` }}>
-                  <span style={{ fontSize: '16px', flexShrink: 0, minWidth: '24px' }}>{medal}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--c-text)' }}>{m.name}</span>
-                      <span style={{ fontSize: '13px', fontWeight: '800', color: scoreColor }}>{score.toFixed(1)} pts</span>
-                    </div>
-                    <div style={{ height: '4px', background: 'var(--c-border)', borderRadius: '9999px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${Math.min(score, 100)}%`, background: scoreColor, borderRadius: '9999px' }} />
-                    </div>
-                    <div style={{ display: 'flex', gap: '12px', marginTop: '4px', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: '10px', color: 'var(--c-text5)' }}>
-                        ✅ {m.validated ?? 0} validées
-                      </span>
-                      <span style={{ fontSize: '10px', color: 'var(--c-text5)' }}>
-                        ❌ {m.rejected ?? 0} rejetées
-                      </span>
-                      <span style={{ fontSize: '10px', color: 'var(--c-text5)' }}>
-                        ⏱ {m.punctuality != null ? `${Number.isInteger(m.punctuality) ? m.punctuality : m.punctuality.toFixed(1)}% ponctuel` : ''}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {scoringMembers.length > 0 && (
-          <div style={{ marginTop: '14px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(34,211,238,0.04)', border: '1px solid rgba(34,211,238,0.1)', fontSize: '11px', color: 'var(--c-text4)' }}>
-            <Trophy size={12} style={{ display: 'inline', marginRight: '4px', color: '#22d3ee' }} />
-            Formule : Ponctualité (40%) + Taux de validation (40%) + Volume (20%)
-          </div>
-        )}
-      </div>
-
     </div>
   );
 }

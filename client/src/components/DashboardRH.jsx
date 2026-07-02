@@ -459,7 +459,7 @@ export default function DashboardRH({
               <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: 'rgba(245, 158, 11, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Star style={{ width: '20px', height: '20px', color: '#fbbf24' }} />
               </div>
-              <span style={{ fontSize: '14px', color: 'var(--c-text3)' }}>XP Global</span>
+              <span style={{ fontSize: '14px', color: 'var(--c-text3)' }}>Points Globaux</span>
             </div>
             <div style={{ fontSize: '30px', fontWeight: '700', color: '#fbbf24' }}>{summary.totalXp}</div>
             <p style={{ fontSize: '12px', color: 'var(--c-text4)', marginTop: '4px' }}>Points cumulés par l'équipe</p>
@@ -578,7 +578,7 @@ export default function DashboardRH({
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', fontSize: '14px', color: 'var(--c-text4)' }}>
                   <th style={{ textAlign: 'left', padding: '12px 24px' }}>Nom/Rôle</th>
-                  <th style={{ textAlign: 'center', padding: '12px' }}>Barre XP</th>
+                  <th style={{ textAlign: 'center', padding: '12px' }}>Barre des Points</th>
                   {canManagePayroll && <th style={{ textAlign: 'center', padding: '12px' }}>Paie</th>}
                 </tr>
               </thead>
