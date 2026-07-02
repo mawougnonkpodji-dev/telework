@@ -22,6 +22,42 @@ import MobileMoneyModal from './MobileMoneyModal.jsx';
 
 const API_URL = getApiUrl();
 
+const PAGE_STYLE = {
+  minHeight: '100%',
+  backgroundColor: 'var(--c-bg)',
+  color: 'var(--c-text2)',
+  padding: '32px',
+  fontFamily: 'DM Sans, -apple-system, BlinkMacSystemFont, sans-serif',
+  transition: 'background 0.22s ease, color 0.22s ease',
+};
+
+const PAGE_CENTER_STYLE = {
+  minHeight: '60vh',
+  backgroundColor: 'var(--c-bg)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const CARD_STYLE = {
+  backgroundColor: 'var(--c-surface)',
+  border: '1px solid var(--c-border2)',
+  padding: '24px',
+  borderRadius: '16px',
+  boxShadow: 'var(--shadow-sm)',
+  transition: 'background 0.22s ease, border-color 0.22s ease',
+};
+
+const PANEL_STYLE = {
+  backgroundColor: 'var(--c-surface)',
+  border: '1px solid var(--c-border2)',
+  borderRadius: '16px',
+  overflow: 'hidden',
+};
+
+const ROW_BORDER = '1px solid var(--c-border3)';
+const PROGRESS_TRACK = { width: '100%', height: '4px', backgroundColor: 'var(--c-border2)', borderRadius: '9999px', overflow: 'hidden' };
+
 export default function DashboardRH({
   projects: projectsProp = [],
   projectMembers = [],
@@ -278,15 +314,9 @@ export default function DashboardRH({
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: '60vh',
-        backgroundColor: '#0f111a',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
+      <div style={PAGE_CENTER_STYLE}>
         <div style={{ textAlign: 'center' }}>
-          <Loader2 style={{ width: '48px', height: '48px', color: '#2563eb', animation: 'spin 1s linear infinite', marginBottom: '16px' }} />
+          <Loader2 style={{ width: '48px', height: '48px', color: 'var(--c-accent)', animation: 'spin 1s linear infinite', marginBottom: '16px' }} />
           <p style={{ color: 'var(--c-text4)' }}>Chargement du tableau de bord...</p>
         </div>
       </div>
@@ -295,13 +325,7 @@ export default function DashboardRH({
 
   if (!dashboardData) {
     return (
-      <div style={{
-        minHeight: '60vh',
-        backgroundColor: '#0f111a',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
+      <div style={PAGE_CENTER_STYLE}>
         <p style={{ color: 'var(--c-text4)' }}>Aucune donnée disponible</p>
       </div>
     );
@@ -318,9 +342,9 @@ export default function DashboardRH({
 
   const healthData = [
     { name: 'À Faire', value: statusDistribution?.todo || 0, color: 'var(--c-text4)' },
-    { name: 'En Cours', value: statusDistribution?.inProgress || 0, color: '#3b82f6' },
-    { name: 'En Revue', value: statusDistribution?.review || 0, color: '#f59e0b' },
-    { name: 'Terminé', value: statusDistribution?.done || 0, color: '#10b981' }
+    { name: 'En Cours', value: statusDistribution?.inProgress || 0, color: 'var(--c-info)' },
+    { name: 'En Revue', value: statusDistribution?.review || 0, color: 'var(--c-warning)' },
+    { name: 'Terminé', value: statusDistribution?.done || 0, color: 'var(--c-success)' }
   ].filter(item => item.value > 0);
 
   const getXpLevel = (xp) => {
@@ -331,13 +355,7 @@ export default function DashboardRH({
   };
 
   return (
-    <div style={{
-      minHeight: '100%',
-      backgroundColor: '#0f111a',
-      color: 'var(--c-text2)',
-      padding: '32px',
-      fontFamily: 'DM Sans, -apple-system, BlinkMacSystemFont, sans-serif'
-    }}>
+    <div style={PAGE_STYLE}>
       <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
         {/* Header */}
         <div style={{
@@ -349,22 +367,23 @@ export default function DashboardRH({
           <h1 style={{
             fontSize: '30px',
             fontWeight: '800',
-            color: '#ffffff',
+            color: 'var(--c-text)',
             letterSpacing: '-0.02em'
           }}>Pilotage RH - Dashboard</h1>
           <button onClick={() => fetchDashboardData()} disabled={loading} style={{
-            backgroundColor: '#2563eb',
+            backgroundColor: 'var(--c-info)',
             color: '#ffffff',
             padding: '10px 24px',
             borderRadius: '12px',
             fontWeight: '500',
             border: 'none',
             cursor: loading ? 'not-allowed' : 'pointer',
-            transition: 'background-color 0.2s',
-            boxShadow: '0 10px 15px -3px rgba(37, 99, 235, 0.2)',
+            transition: 'background-color 0.2s, opacity 0.2s',
+            boxShadow: 'var(--shadow-sm)',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '8px',
+            opacity: loading ? 0.7 : 1,
           }}>
             <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
             Rafraîchir
@@ -382,9 +401,9 @@ export default function DashboardRH({
             }}
             disabled={availableProjects.length === 0}
             style={{
-              backgroundColor: '#1a1d2e',
-              border: '1px solid var(--c-surface)',
-              color: '#ffffff',
+              backgroundColor: 'var(--c-input-bg)',
+              border: '1px solid var(--c-input-border)',
+              color: 'var(--c-text)',
               borderRadius: '8px',
               padding: '8px 16px',
               outline: 'none',
@@ -392,7 +411,7 @@ export default function DashboardRH({
             }}
           >
             {availableProjects.map(project => (
-              <option key={project.id} value={project.id} style={{ backgroundColor: '#1a1d2e' }}>
+              <option key={project.id} value={project.id} style={{ backgroundColor: 'var(--c-surface)', color: 'var(--c-text)' }}>
                 {project.name}
               </option>
             ))}
@@ -407,80 +426,52 @@ export default function DashboardRH({
           marginBottom: '32px'
         }}>
           {/* KPI 1: Efficacité Équipe */}
-          <div style={{
-            backgroundColor: 'rgba(22, 25, 39, 0.5)',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            padding: '24px',
-            borderRadius: '16px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
-          }}>
+          <div style={CARD_STYLE}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: 'rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <TrendingUp style={{ width: '20px', height: '20px', color: '#34d399' }} />
+                <TrendingUp style={{ width: '20px', height: '20px', color: 'var(--c-success)' }} />
               </div>
               <span style={{ fontSize: '14px', color: 'var(--c-text3)' }}>Efficacité Équipe</span>
             </div>
-            <div style={{ fontSize: '30px', fontWeight: '700', color: '#34d399', marginBottom: '8px' }}>{summary.completionRate}%</div>
-            <div style={{ width: '100%', height: '4px', backgroundColor: '#334155', borderRadius: '9999px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', background: 'linear-gradient(90deg, #10b981, #34d399)', width: `${summary.completionRate}%` }} />
+            <div style={{ fontSize: '30px', fontWeight: '700', color: 'var(--c-success)', marginBottom: '8px' }}>{summary.completionRate}%</div>
+            <div style={PROGRESS_TRACK}>
+              <div style={{ height: '100%', background: 'linear-gradient(90deg, var(--c-success), #34d399)', width: `${summary.completionRate}%` }} />
             </div>
           </div>
 
           {/* KPI 2: Missions Critiques */}
-          <div style={{
-            backgroundColor: 'rgba(22, 25, 39, 0.5)',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            padding: '24px',
-            borderRadius: '16px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
-          }}>
+          <div style={CARD_STYLE}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <AlertCircle style={{ width: '20px', height: '20px', color: '#f87171' }} />
+                <AlertCircle style={{ width: '20px', height: '20px', color: 'var(--c-danger)' }} />
               </div>
               <span style={{ fontSize: '14px', color: 'var(--c-text3)' }}>Missions Critiques</span>
             </div>
-            <div style={{ fontSize: '30px', fontWeight: '700', color: '#f87171' }}>{summary.blockedCount}</div>
+            <div style={{ fontSize: '30px', fontWeight: '700', color: 'var(--c-danger)' }}>{summary.blockedCount}</div>
             <p style={{ fontSize: '12px', color: 'var(--c-text4)', marginTop: '4px' }}>Tâches prioritaires ou bloquées</p>
           </div>
 
           {/* KPI 3: XP Global */}
-          <div style={{
-            backgroundColor: 'rgba(22, 25, 39, 0.5)',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            padding: '24px',
-            borderRadius: '16px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
-          }}>
+          <div style={CARD_STYLE}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: 'rgba(245, 158, 11, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Star style={{ width: '20px', height: '20px', color: '#fbbf24' }} />
+                <Star style={{ width: '20px', height: '20px', color: 'var(--c-warning)' }} />
               </div>
               <span style={{ fontSize: '14px', color: 'var(--c-text3)' }}>Points Globaux</span>
             </div>
-            <div style={{ fontSize: '30px', fontWeight: '700', color: '#fbbf24' }}>{summary.totalXp}</div>
+            <div style={{ fontSize: '30px', fontWeight: '700', color: 'var(--c-warning)' }}>{summary.totalXp}</div>
             <p style={{ fontSize: '12px', color: 'var(--c-text4)', marginTop: '4px' }}>Points cumulés par l'équipe</p>
           </div>
 
           {/* KPI 4: Activité */}
-          <div style={{
-            backgroundColor: 'rgba(22, 25, 39, 0.5)',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            padding: '24px',
-            borderRadius: '16px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
-          }}>
+          <div style={CARD_STYLE}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: 'rgba(59, 130, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Users style={{ width: '20px', height: '20px', color: '#60a5fa' }} />
+                <Users style={{ width: '20px', height: '20px', color: 'var(--c-info)' }} />
               </div>
               <span style={{ fontSize: '14px', color: 'var(--c-text3)' }}>Activité</span>
             </div>
-            <div style={{ fontSize: '30px', fontWeight: '700', color: '#60a5fa' }}>{summary.activeMembers}</div>
+            <div style={{ fontSize: '30px', fontWeight: '700', color: 'var(--c-info)' }}>{summary.activeMembers}</div>
             <p style={{ fontSize: '12px', color: 'var(--c-text4)', marginTop: '4px' }}>membres connectés / {summary.totalMembers}</p>
           </div>
         </div>
@@ -493,24 +484,17 @@ export default function DashboardRH({
           marginBottom: '32px'
         }}>
           {/* BarChart */}
-          <div style={{
-            backgroundColor: 'rgba(22, 25, 39, 0.5)',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            padding: '24px',
-            borderRadius: '16px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
-          }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', marginBottom: '16px' }}>Charge de travail par membre</h3>
+          <div style={CARD_STYLE}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--c-text)', marginBottom: '16px' }}>Charge de travail par membre</h3>
             {workloadData.length > 0 ? (
               <ResponsiveContainer width="100%" height={256}>
                 <BarChart data={workloadData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="name" stroke="var(--c-text3)" fontSize={12} />
-                  <YAxis stroke="var(--c-text3)" fontSize={12} />
-                  <Tooltip contentStyle={{ backgroundColor: 'var(--c-surface)', border: '1px solid #334155' }} />
-                  <Bar dataKey="Actives" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Terminées" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--c-border2)" />
+                  <XAxis dataKey="name" stroke="var(--c-text4)" fontSize={12} />
+                  <YAxis stroke="var(--c-text4)" fontSize={12} />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--c-surface)', border: '1px solid var(--c-border2)', color: 'var(--c-text)' }} />
+                  <Bar dataKey="Actives" fill="var(--c-info)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Terminées" fill="var(--c-success)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -519,15 +503,8 @@ export default function DashboardRH({
           </div>
 
           {/* PieChart */}
-          <div style={{
-            backgroundColor: 'rgba(22, 25, 39, 0.5)',
-            backdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            padding: '24px',
-            borderRadius: '16px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
-          }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', marginBottom: '16px' }}>Répartition des Tâches</h3>
+          <div style={CARD_STYLE}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--c-text)', marginBottom: '16px' }}>Répartition des Tâches</h3>
             {healthData.length > 0 ? (
               <ResponsiveContainer width="100%" height={256}>
                 <PieChart>
@@ -536,7 +513,7 @@ export default function DashboardRH({
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: 'var(--c-surface)', border: '1px solid #334155' }} />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--c-surface)', border: '1px solid var(--c-border2)', color: 'var(--c-text)' }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -564,19 +541,16 @@ export default function DashboardRH({
 
         {/* Leaderboard */}
         <div style={{
-          width: '100%',
-          backgroundColor: 'rgba(22, 25, 39, 0.3)',
-          borderRadius: '16px',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          overflow: 'hidden'
+          ...PANEL_STYLE,
+          backgroundColor: 'var(--c-surface)',
         }}>
-          <div style={{ padding: '24px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff' }}>Membres du projet</h3>
+          <div style={{ padding: '24px', borderBottom: ROW_BORDER }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--c-text)' }}>Membres du projet</h3>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', fontSize: '14px', color: 'var(--c-text4)' }}>
+                <tr style={{ borderBottom: ROW_BORDER, fontSize: '14px', color: 'var(--c-text4)' }}>
                   <th style={{ textAlign: 'left', padding: '12px 24px' }}>Nom/Rôle</th>
                   <th style={{ textAlign: 'center', padding: '12px' }}>Barre des Points</th>
                   {canManagePayroll && <th style={{ textAlign: 'center', padding: '12px' }}>Paie</th>}
@@ -590,20 +564,20 @@ export default function DashboardRH({
                     const memberSlip = latestSlipByUserId[Number(member.userId)];
                     const isPaid = paidUserIds.has(Number(member.userId));
                     return (
-                      <tr key={member.userId || index} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', transition: 'background-color 0.2s' }}>
+                      <tr key={member.userId || index} style={{ borderBottom: ROW_BORDER, transition: 'background-color 0.2s' }}>
                         <td style={{ padding: '16px 24px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <span style={{ fontSize: '14px', fontWeight: '600', color: '#cbd5e1' }}>{member.name?.charAt(0).toUpperCase() || '?'}</span>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'var(--c-muted-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid var(--c-border3)' }}>
+                              <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--c-text3)' }}>{member.name?.charAt(0).toUpperCase() || '?'}</span>
                             </div>
                             <div>
                               <span style={{ color: 'var(--c-text2)', fontWeight: '500' }}>{member.name || 'Inconnu'}</span>
                               <div style={{ fontSize: '12px', color: 'var(--c-text4)' }}>{member.role || 'Membre'}</div>
                               {member.activeTasks > 0 && (
-                                <div style={{ fontSize: '10px', color: '#3b82f6' }}>{member.activeTasks} tâche{member.activeTasks > 1 ? 's' : ''} active{member.activeTasks > 1 ? 's' : ''}</div>
+                                <div style={{ fontSize: '10px', color: 'var(--c-info)' }}>{member.activeTasks} tâche{member.activeTasks > 1 ? 's' : ''} active{member.activeTasks > 1 ? 's' : ''}</div>
                               )}
                               {memberSlip && (
-                                <div style={{ fontSize: '11px', color: '#34d399', fontWeight: '600', marginTop: '2px' }}>
+                                <div style={{ fontSize: '11px', color: 'var(--c-success)', fontWeight: '600', marginTop: '2px' }}>
                                   Net : {Number(memberSlip.net_amount).toLocaleString('fr-FR')} {memberSlip.run?.currency || 'XOF'}
                                 </div>
                               )}
@@ -612,10 +586,10 @@ export default function DashboardRH({
                         </td>
                         <td style={{ padding: '16px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div style={{ flex: 1, height: '8px', backgroundColor: '#334155', borderRadius: '9999px', overflow: 'hidden' }}>
+                            <div style={{ flex: 1, height: '8px', backgroundColor: 'var(--c-border2)', borderRadius: '9999px', overflow: 'hidden' }}>
                               <div style={{ height: '100%', backgroundColor: xpLevel.color, transition: 'width 0.5s', width: `${xpPercentage}%` }} />
                             </div>
-                            <span style={{ fontSize: '14px', fontWeight: '500', color: '#fbbf24', width: '48px', textAlign: 'right' }}>{member.xp || 0}</span>
+                            <span style={{ fontSize: '14px', fontWeight: '500', color: 'var(--c-warning)', width: '48px', textAlign: 'right' }}>{member.xp || 0}</span>
                           </div>
                         </td>
                         {canManagePayroll && (
@@ -628,7 +602,7 @@ export default function DashboardRH({
                                       padding: '3px 8px',
                                       borderRadius: '9999px',
                                       background: 'rgba(16, 185, 129, 0.15)',
-                                      color: '#34d399',
+                                      color: 'var(--c-success)',
                                       fontSize: '10px',
                                       fontWeight: '700',
                                       border: '1px solid rgba(16, 185, 129, 0.35)',
@@ -644,11 +618,11 @@ export default function DashboardRH({
                                     style={{
                                       padding: '6px 12px',
                                       borderRadius: '8px',
-                                      border: isPaid ? '1px solid #374151' : 'none',
+                                      border: isPaid ? '1px solid var(--c-border2)' : 'none',
                                       background: isPaid
-                                        ? 'rgba(55,65,81,0.4)'
-                                        : 'linear-gradient(135deg, #059669, #10b981)',
-                                      color: isPaid ? '#6b7280' : '#fff',
+                                        ? 'var(--c-muted-bg)'
+                                        : 'linear-gradient(135deg, #059669, var(--c-success))',
+                                      color: isPaid ? 'var(--c-text5)' : '#fff',
                                       fontSize: '11px',
                                       fontWeight: '600',
                                       cursor: 'pointer',
@@ -665,7 +639,7 @@ export default function DashboardRH({
                                     style={{
                                       padding: '6px 12px',
                                       borderRadius: '8px',
-                                      border: '1px solid #334155',
+                                      border: '1px solid var(--c-border2)',
                                       background: 'transparent',
                                       color: 'var(--c-text3)',
                                       fontSize: '11px',
@@ -703,8 +677,8 @@ export default function DashboardRH({
           <div style={{
             marginTop: '28px',
             borderRadius: '16px',
-            border: '1px solid rgba(34,211,238,0.15)',
-            backgroundColor: 'rgba(8,145,178,0.04)',
+            border: '1px solid var(--c-border2)',
+            backgroundColor: 'var(--c-surface)',
             overflow: 'hidden',
           }}>
             {/* Header */}
@@ -715,14 +689,14 @@ export default function DashboardRH({
                 width: '100%', padding: '18px 24px', border: 'none',
                 background: 'transparent', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: '12px',
-                borderBottom: aiSectionOpen ? '1px solid rgba(34,211,238,0.1)' : 'none',
+                borderBottom: aiSectionOpen ? ROW_BORDER : 'none',
               }}
             >
               <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(34,211,238,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Brain size={18} style={{ color: '#22d3ee' }} />
+                <Brain size={18} style={{ color: 'var(--c-accent)' }} />
               </div>
               <div style={{ flex: 1, textAlign: 'left' }}>
-                <div style={{ fontSize: '16px', fontWeight: '700', color: '#ffffff' }}>Scoring IA — Comportement &amp; Performance</div>
+                <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--c-text)' }}>Scoring IA — Comportement &amp; Performance</div>
                 <div style={{ fontSize: '12px', color: 'var(--c-text4)', marginTop: '2px' }}>
                   6 variables comportementales · Modèle LinearRegression sklearn · Score 0–100
                 </div>
@@ -747,8 +721,8 @@ export default function DashboardRH({
                     <div key={v.label} style={{
                       display: 'flex', alignItems: 'center', gap: '6px',
                       padding: '4px 10px', borderRadius: '9999px',
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.08)',
+                      background: 'var(--c-hover)',
+                      border: '1px solid var(--c-border3)',
                     }}>
                       <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: v.color }} />
                       <span style={{ fontSize: '11px', color: 'var(--c-text3)' }}>{v.label}</span>
@@ -766,8 +740,8 @@ export default function DashboardRH({
                       disabled={aiLoading}
                       style={{
                         padding: '10px 20px', borderRadius: '10px', border: 'none',
-                        background: aiLoading ? 'rgba(34,211,238,0.15)' : 'linear-gradient(135deg,#22d3ee,#0891b2)',
-                        color: aiLoading ? 'var(--c-text4)' : '#0f172a',
+                        background: aiLoading ? 'var(--c-hover)' : 'linear-gradient(135deg, var(--c-accent), var(--c-accent2))',
+                        color: aiLoading ? 'var(--c-text4)' : '#fff',
                         fontWeight: '700', fontSize: '13px', cursor: aiLoading ? 'not-allowed' : 'pointer',
                         display: 'flex', alignItems: 'center', gap: '8px',
                       }}
@@ -786,7 +760,7 @@ export default function DashboardRH({
                     </span>
                   )}
                   {aiError && (
-                    <span style={{ fontSize: '12px', color: '#f87171' }}>{aiError}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--c-danger)' }}>{aiError}</span>
                   )}
                 </div>
 
@@ -795,7 +769,7 @@ export default function DashboardRH({
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ fontSize: '11px', color: 'var(--c-text4)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        <tr style={{ fontSize: '11px', color: 'var(--c-text4)', borderBottom: ROW_BORDER }}>
                           <th style={{ textAlign: 'left', padding: '8px 12px', fontWeight: '600' }}>Membre</th>
                           <th style={{ textAlign: 'center', padding: '8px 12px', fontWeight: '600' }}>Score IA</th>
                           <th style={{ textAlign: 'center', padding: '8px 8px', fontWeight: '600', color: '#a78bfa' }}>Ponct.</th>
@@ -808,11 +782,11 @@ export default function DashboardRH({
                       </thead>
                       <tbody>
                         {aiScores.map((s, i) => {
-                          const scoreColor = s.score >= 75 ? '#34d399' : s.score >= 50 ? '#fbbf24' : '#f87171';
+                          const scoreColor = s.score >= 75 ? 'var(--c-success)' : s.score >= 50 ? 'var(--c-warning)' : 'var(--c-danger)';
                           const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '';
                           return (
-                            <tr key={s.user_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 0.15s' }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(34,211,238,0.04)'}
+                            <tr key={s.user_id} style={{ borderBottom: ROW_BORDER, transition: 'background 0.15s' }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--c-hover)'}
                               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                             >
                               <td style={{ padding: '10px 12px', color: 'var(--c-text2)' }}>
@@ -821,7 +795,7 @@ export default function DashboardRH({
                               </td>
                               <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-                                  <div style={{ flex: 1, maxWidth: '80px', height: '5px', background: 'rgba(255,255,255,0.08)', borderRadius: '9999px', overflow: 'hidden' }}>
+                                  <div style={{ flex: 1, maxWidth: '80px', height: '5px', background: 'var(--c-border2)', borderRadius: '9999px', overflow: 'hidden' }}>
                                     <div style={{ height: '100%', width: `${s.score}%`, background: `linear-gradient(90deg, ${scoreColor}99, ${scoreColor})`, borderRadius: '9999px' }} />
                                   </div>
                                   <span style={{ fontWeight: '700', fontSize: '13px', color: scoreColor, minWidth: '36px' }}>
@@ -865,17 +839,17 @@ export default function DashboardRH({
               marginTop: '28px',
               padding: '24px',
               borderRadius: '16px',
-              border: '1px solid rgba(255,255,255,0.08)',
-              backgroundColor: 'rgba(22,25,39,0.4)',
+              border: '1px solid var(--c-border2)',
+              backgroundColor: 'var(--c-surface)',
             }}
           >
-            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Receipt size={20} style={{ color: '#34d399' }} /> Paie &amp; Mobile Money
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--c-text)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Receipt size={20} style={{ color: 'var(--c-success)' }} /> Paie &amp; Mobile Money
             </h3>
             <p style={{ fontSize: '12px', color: 'var(--c-text3)', marginBottom: '16px' }}>
               Gérez la paie mensuelle et les transactions Mobile Money de votre équipe.
             </p>
-            {payrollMsg ? <p style={{ fontSize: '13px', color: '#fbbf24', marginBottom: '12px' }}>{payrollMsg}</p> : null}
+            {payrollMsg ? <p style={{ fontSize: '13px', color: 'var(--c-warning)', marginBottom: '12px' }}>{payrollMsg}</p> : null}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
               <button
                 type="button"
@@ -898,9 +872,9 @@ export default function DashboardRH({
                 style={{
                   padding: '10px 16px',
                   borderRadius: '10px',
-                  border: '1px solid #22d3ee',
+                  border: '1px solid var(--c-accent)',
                   background: 'rgba(34,211,238,0.1)',
-                  color: '#22d3ee',
+                  color: 'var(--c-accent)',
                   fontWeight: '600',
                   cursor: 'pointer',
                   display: 'flex',
@@ -912,7 +886,7 @@ export default function DashboardRH({
               </button>
             </div>
 
-            <h4 style={{ color: '#cbd5e1', fontSize: '14px', marginBottom: '8px' }}>Historique paie</h4>
+            <h4 style={{ color: 'var(--c-text3)', fontSize: '14px', marginBottom: '8px' }}>Historique paie</h4>
             <div style={{ overflowX: 'auto', marginBottom: '16px' }}>
               <table style={{ width: '100%', fontSize: '12px', color: 'var(--c-text3)' }}>
                 <thead>
@@ -924,14 +898,14 @@ export default function DashboardRH({
                 </thead>
                 <tbody>
                   {payrollRuns.map((r) => (
-                    <tr key={r.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                    <tr key={r.id} style={{ borderTop: ROW_BORDER }}>
                       <td style={{ padding: '8px', color: 'var(--c-text2)' }}>{r.month}</td>
                       <td style={{ padding: '8px' }}>{r.status}</td>
                       <td style={{ padding: '8px' }}>
                         <button
                           type="button"
                           onClick={() => handleShowSlips(r.id)}
-                          style={{ background: 'transparent', border: 'none', color: '#38bdf8', cursor: 'pointer', textDecoration: 'underline' }}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--c-info)', cursor: 'pointer', textDecoration: 'underline' }}
                         >
                           Bulletins
                         </button>
@@ -951,13 +925,13 @@ export default function DashboardRH({
 
             {slipTable ? (
               <div style={{ marginBottom: '16px' }}>
-                <h4 style={{ color: '#cbd5e1', fontSize: '14px', marginBottom: '8px' }}>Fiches — {slipTable.run?.month}</h4>
+                <h4 style={{ color: 'var(--c-text3)', fontSize: '14px', marginBottom: '8px' }}>Fiches — {slipTable.run?.month}</h4>
                 <table style={{ width: '100%', fontSize: '12px' }}>
                   <tbody>
                     {(slipTable.slips || []).map((s) => {
                       const nm = projectMembers?.find((m) => m.id === s.user_id)?.name;
                       return (
-                        <tr key={s.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <tr key={s.id} style={{ borderTop: ROW_BORDER }}>
                           <td style={{ padding: '8px', color: 'var(--c-text2)' }}>{nm || `Utilisateur #${s.user_id}`}</td>
                           <td style={{ padding: '8px', color: 'var(--c-text3)' }}>
                             Net {s.net_amount} {slipTable.run?.currency}
@@ -967,9 +941,9 @@ export default function DashboardRH({
                               type="button"
                               onClick={() => openPayrollSlipInNewTab(slipTable.runId, s.user_id)}
                               style={{
-                                background: '#334155',
-                                border: 'none',
-                                color: '#fff',
+                                background: 'var(--c-muted-bg)',
+                                border: '1px solid var(--c-border2)',
+                                color: 'var(--c-text)',
                                 padding: '6px 10px',
                                 borderRadius: '8px',
                                 cursor: 'pointer',
@@ -986,12 +960,12 @@ export default function DashboardRH({
               </div>
             ) : null}
 
-            <h4 style={{ color: '#cbd5e1', fontSize: '14px', marginBottom: '8px' }}>Transactions Mobile Money</h4>
+            <h4 style={{ color: 'var(--c-text3)', fontSize: '14px', marginBottom: '8px' }}>Transactions Mobile Money</h4>
             <div style={{ maxHeight: '180px', overflowY: 'auto', fontSize: '12px', color: 'var(--c-text3)' }}>
               {(mobileTx || []).slice(0, 20).map((t) => (
-                <div key={t.id} style={{ padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <div key={t.id} style={{ padding: '6px 0', borderBottom: ROW_BORDER }}>
                   {t.external_reference} — {t.amount} {t.currency} —{' '}
-                  <span style={{ color: t.status === 'success' ? '#34d399' : '#f87171' }}>{t.status}</span>
+                  <span style={{ color: t.status === 'success' ? 'var(--c-success)' : 'var(--c-danger)' }}>{t.status}</span>
                 </div>
               ))}
               {mobileTx.length === 0 ? <div>Aucune transaction</div> : null}

@@ -127,6 +127,8 @@ def _task_light_dict(task):
         "column_id": task.column_id,
         "assignees": [u.id for u in task.assignees],
         "sprint_id": task.sprint_id,
+        "depends_on": [d.prerequisite_task_id for d in task.depends_on_links],
+        "created_at": task.created_at.isoformat() if task.created_at else None,
         "updated_at": task.updated_at.isoformat() if task.updated_at else None,
     }
 
@@ -245,7 +247,7 @@ def get_tasks(project_id):
     )
     tasks_page = (
         Task.query.filter_by(project_id=project_id, parent_id=None)
-        .options(joinedload(Task.assignees))
+        .options(joinedload(Task.assignees), joinedload(Task.depends_on_links))
         .order_by(Task.updated_at.desc())
         .paginate(page=page, per_page=per_page, error_out=False)
     )

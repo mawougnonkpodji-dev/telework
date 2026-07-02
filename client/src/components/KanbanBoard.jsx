@@ -4,6 +4,7 @@ import { Calendar, AlertCircle, Pencil, Trash2, Plus, Send, Upload, Link, Play, 
 import TaskModal from './TaskModal';
 import TaskDetailPanel from './TaskDetailPanel';
 import { checkDependencyMet } from '../utils/taskHelpers';
+import { getDeadlineUrgency } from '../utils/deadlineColors.js';
 import { getApiUrl, authJsonHeaders, enrichBoardTasks } from '../utils/apiHelpers.js';
 
 const columns = [
@@ -45,24 +46,25 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
       backdropFilter: 'blur(8px)'
     }} onClick={onClose}>
       <div style={{
-        background: '#ffffff', borderRadius: '20px', padding: '28px',
-        width: '90%', maxWidth: '480px', boxShadow: '0 25px 50px rgba(0,0,0,0.5)'
+        background: 'var(--c-surface)', borderRadius: '20px', padding: '28px',
+        width: '90%', maxWidth: '480px', boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+        border: '1px solid var(--c-border2)',
       }} onClick={e => e.stopPropagation()}>
-        <h3 style={{ color: '#111827', marginBottom: '6px', fontSize: '20px', fontWeight: '700' }}>Livrer le travail</h3>
-        <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px' }}>Ajouter un livrable pour la tâche.</p>
+        <h3 style={{ color: 'var(--c-text)', marginBottom: '6px', fontSize: '20px', fontWeight: '700' }}>Livrer le travail</h3>
+        <p style={{ color: 'var(--c-text4)', fontSize: '14px', marginBottom: '20px' }}>Ajouter un livrable pour la tâche.</p>
 
         <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
           <button onClick={() => setMode('link')} style={{
             flex: 1, padding: '10px', borderRadius: '10px', border: 'none',
-            background: mode === 'link' ? '#4f46e5' : '#f3f4f6',
-            color: mode === 'link' ? '#fff' : '#6b7280', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
+            background: mode === 'link' ? '#4f46e5' : 'var(--c-muted-bg)',
+            color: mode === 'link' ? '#fff' : 'var(--c-text4)', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
           }}>
             <Link size={14} style={{marginRight: 6}}/>Lien
           </button>
           <button onClick={() => setMode('file')} style={{
             flex: 1, padding: '10px', borderRadius: '10px', border: 'none',
-            background: mode === 'file' ? '#4f46e5' : '#f3f4f6',
-            color: mode === 'file' ? '#fff' : '#6b7280', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
+            background: mode === 'file' ? '#4f46e5' : 'var(--c-muted-bg)',
+            color: mode === 'file' ? '#fff' : 'var(--c-text4)', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
           }}>
             <Upload size={14} style={{marginRight: 6}}/>Fichier
           </button>
@@ -76,8 +78,9 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
             placeholder="https://..."
             style={{
               width: '100%', padding: '14px', borderRadius: '12px',
-              border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none',
-              marginBottom: '16px', boxSizing: 'border-box'
+              border: '1px solid var(--c-input-border)', fontSize: '14px', outline: 'none',
+              marginBottom: '16px', boxSizing: 'border-box',
+              background: 'var(--c-input-bg)', color: 'var(--c-text)',
             }}
           />
         )}
@@ -86,9 +89,9 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
           <div>
             <button onClick={() => document.getElementById('file-input').click()} style={{
               width: '100%', padding: '14px', borderRadius: '12px',
-              border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none',
+              border: '1px solid var(--c-input-border)', fontSize: '14px', outline: 'none',
               marginBottom: '16px', boxSizing: 'border-box',
-              background: '#f3f4f6', color: '#6b7280', cursor: 'pointer',
+              background: 'var(--c-muted-bg)', color: 'var(--c-text4)', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
             }}>
               <Upload size={16} />
@@ -122,7 +125,7 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
         
         
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button onClick={onClose} style={{ flex: 1, padding: '14px', borderRadius: '12px', background: '#f3f4f6', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Annuler</button>
+            <button onClick={onClose} style={{ flex: 1, padding: '14px', borderRadius: '12px', background: 'var(--c-muted-bg)', border: '1px solid var(--c-border2)', color: 'var(--c-text2)', cursor: 'pointer', fontWeight: '600' }}>Annuler</button>
               <button onClick={() => {
                 let deliverableValue = '';
                 let deliverableType = '';
@@ -232,29 +235,9 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
     return () => clearInterval(interval);
   }, []);
 
-  const getHourglassColor = (task) => {
-    const due = task.deadline || task.due_date;
-    if (!due || !task.created_at) return 'var(--c-text3)';
-
-    const start = new Date(task.created_at).getTime();
-    const deadline = new Date(due).getTime();
-    const now = Date.now();
-
-    if (now >= deadline) return '#ef4444';
-
-    const totalDuration = deadline - start;
-    const remaining = deadline - now;
-    const remainingPercentage = (remaining / totalDuration) * 100;
-
-    if (remainingPercentage > 50) return '#22d3ee';
-    if (remainingPercentage > 25) return '#f59e0b';
-    return '#ef4444';
-  };
-
   const getHourglassPulse = (task) => {
-    const due = task.deadline || task.due_date;
-    if (!due || !task.created_at) return 'none';
-    return Date.now() >= new Date(due).getTime() ? 'pulse' : 'none';
+    const urgency = getDeadlineUrgency(task);
+    return urgency.isOverdue ? 'pulse' : 'none';
   };
 
   const isObservateur = myRole === 'observateur';
@@ -503,9 +486,9 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
       <div style={{ marginBottom: '24px' }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 20px',
-          background: 'rgba(30, 41, 59, 0.7)', borderRadius: '20px', border: '1px solid var(--c-border2)'
+          background: 'var(--c-surface)', borderRadius: '20px', border: '1px solid var(--c-border2)'
         }}>
-          <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.3)', padding: '4px', borderRadius: '30px' }}>
+          <div style={{ display: 'flex', gap: '6px', background: 'var(--c-muted-bg)', padding: '4px', borderRadius: '30px' }}>
             {projects?.map(p => (
               <button key={p.id} onClick={() => onProjectChange(p)} style={{
                 padding: '8px 16px', borderRadius: '30px', border: 'none',
@@ -518,7 +501,7 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
             <div style={{ flex: 1, height: '6px', background: 'var(--c-border2)', borderRadius: '3px', overflow: 'hidden' }}>
               <div style={{ width: `${progress}%`, height: '100%', background: 'linear-gradient(90deg, #4f46e5, #7c3aed)', transition: 'width 0.4s' }} />
             </div>
-            <span style={{ fontSize: '12px', fontWeight: '700', color: '#a5b4fc' }}>{progress}%</span>
+            <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--c-accent)' }}>{progress}%</span>
           </div>
           {isGestionnaire && (
             <button
@@ -534,7 +517,7 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
           )}
         </div>
         {permissionHint && (
-          <div style={{ marginTop: '8px', fontSize: '12px', color: '#fbbf24' }}>{permissionHint}</div>
+          <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--c-warning)' }}>{permissionHint}</div>
         )}
       </div>
 
@@ -565,9 +548,9 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                   ref={provided.innerRef}
                   {...provided.droppableProps}
                   style={{
-                    flex: 1, minWidth: '280px', background: snapshot.isDraggingOver ? 'rgba(30, 41, 59, 0.6)' : 'rgba(15, 23, 42, 0.4)',
+                    flex: 1, minWidth: '280px', background: snapshot.isDraggingOver ? 'var(--c-column-drag)' : 'var(--c-column)',
                     borderRadius: '20px', padding: '16px', display: 'flex', flexDirection: 'column',
-                    border: '1px solid var(--c-hover)', position: 'relative', transition: 'background 0.2s'
+                    border: '1px solid var(--c-border2)', position: 'relative', transition: 'background 0.2s'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center' }}>
@@ -593,7 +576,7 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                               ...provided.draggableProps.style,
                               background: snapshot.isDragging ? 'var(--c-surface)' : 'var(--c-surface2)',
                               borderRadius: '16px', padding: '16px',
-                              border: `1px solid ${snapshot.isDragging ? '#4f46e5' : 'rgba(255,255,255,0.08)'}`,
+                              border: `1px solid ${snapshot.isDragging ? '#4f46e5' : 'var(--c-border2)'}`,
                               zIndex: snapshot.isDragging ? 9999 : 1,
                               opacity: task._pending ? 0.85 : 1,
                               transform: snapshot.isDragging ? `${provided.draggableProps.style.transform} rotate(2deg)` : provided.draggableProps.style.transform,
@@ -707,16 +690,18 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                                )}
                               
                               {/* Sablier intelligent pour tâches en cours (basé sur deadline) */}
-                              {column.id === 'inProgress' && (task.deadline || task.due_date) && (
+                              {column.id === 'inProgress' && (task.deadline || task.due_date) && (() => {
+                                const urgency = getDeadlineUrgency(task);
+                                return (
                                 <div style={{ 
                                   display: 'flex', 
                                   alignItems: 'center', 
                                   gap: '6px',
                                   padding: '4px 10px',
                                   borderRadius: '6px',
-                                  background: `rgba(${getHourglassColor(task) === '#22d3ee' ? '34,211,238,0.15' : getHourglassColor(task) === '#f59e0b' ? '245,158,11,0.15' : '239,68,68,0.15'})`,
-                                  border: `1px solid ${getHourglassColor(task)}`,
-                                  color: getHourglassColor(task),
+                                  background: urgency.bg,
+                                  border: `1px solid ${urgency.color}`,
+                                  color: urgency.color,
                                   fontSize: '10px',
                                   fontWeight: '700',
                                   animation: getHourglassPulse(task) === 'pulse' ? 'pulseGlowRed 1.5s ease-in-out infinite' : 'none',
@@ -725,7 +710,8 @@ function DeliverableModal({ isOpen, onClose, onSubmit, task }) {
                                   <Timer size={12} style={{ animation: 'spin 3s linear infinite' }} />
                                   <span>En cours</span>
                                 </div>
-                              )}
+                                );
+                              })()}
                               
                                 {/* Badge de tâche rejetée */}
                                 {task.status === 'rejected' && (

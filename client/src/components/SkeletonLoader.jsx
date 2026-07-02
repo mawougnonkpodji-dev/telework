@@ -1,10 +1,10 @@
 export function SkeletonCard() {
   return (
     <div style={{
-      background: '#fff',
+      background: 'var(--c-surface)',
       borderRadius: '12px',
       padding: '16px',
-      border: '1px solid #e5e7eb'
+      border: '1px solid var(--c-border2)'
     }}>
       <style>{`
         @keyframes shimmer {
@@ -12,7 +12,7 @@ export function SkeletonCard() {
           100% { background-position: 200px 0; }
         }
         .skeleton-line {
-          background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+          background: linear-gradient(90deg, var(--c-hover) 25%, var(--c-border2) 50%, var(--c-hover) 75%);
           background-size: 400px 100%;
           animation: shimmer 1.5s infinite;
         }
@@ -33,12 +33,24 @@ export function SkeletonCard() {
 export function SkeletonKanban() {
   return (
     <div style={{ display: 'flex', gap: '16px', height: '100%' }}>
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: -200px 0; }
+          100% { background-position: 200px 0; }
+        }
+        .skeleton-line {
+          background: linear-gradient(90deg, var(--c-hover) 25%, var(--c-border2) 50%, var(--c-hover) 75%);
+          background-size: 400px 100%;
+          animation: shimmer 1.5s infinite;
+        }
+      `}</style>
       {[1, 2, 3, 4].map(i => (
         <div key={i} style={{
           flex: 1,
-          background: '#f3f4f6',
+          background: 'var(--c-column)',
           borderRadius: '16px',
-          padding: '16px'
+          padding: '16px',
+          border: '1px solid var(--c-border2)',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
             <div className="skeleton-line" style={{ height: '14px', borderRadius: '4px', width: '80px' }} />
@@ -58,18 +70,29 @@ export function SkeletonKanban() {
 export function SkeletonTable({ rows = 5 }) {
   return (
     <div style={{
-      background: '#fff',
+      background: 'var(--c-surface)',
       borderRadius: '16px',
       overflow: 'hidden',
-      border: '1px solid #e5e7eb'
+      border: '1px solid var(--c-border2)'
     }}>
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: -200px 0; }
+          100% { background-position: 200px 0; }
+        }
+        .skeleton-line {
+          background: linear-gradient(90deg, var(--c-hover) 25%, var(--c-border2) 50%, var(--c-hover) 75%);
+          background-size: 400px 100%;
+          animation: shimmer 1.5s infinite;
+        }
+      `}</style>
       {/* Header */}
       <div style={{
         display: 'flex',
         gap: '16px',
         padding: '16px 20px',
-        borderBottom: '1px solid #e5e7eb',
-        background: '#f9fafb'
+        borderBottom: '1px solid var(--c-border2)',
+        background: 'var(--c-muted-bg)'
       }}>
         {[140, 80, 80, 100, 100].map((w, i) => (
           <div key={i} className="skeleton-line" style={{ height: '12px', width: w, borderRadius: '4px' }} />
@@ -82,7 +105,7 @@ export function SkeletonTable({ rows = 5 }) {
           alignItems: 'center',
           gap: '16px',
           padding: '16px 20px',
-          borderBottom: '1px solid #f3f4f6'
+          borderBottom: '1px solid var(--c-border3)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 2 }}>
             <div className="skeleton-line" style={{ width: '40px', height: '40px', borderRadius: '50%' }} />

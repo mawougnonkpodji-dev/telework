@@ -7,6 +7,16 @@ import {
 import { getApiUrl, authJsonHeaders } from '../utils/apiHelpers.js';
 import { getAuthSocket, joinProjectRoom, leaveProjectRoom } from '../utils/socket.js';
 import { deleteChannel } from '../services/backendApi.js';
+import {
+  channelCacheKey,
+  dmCacheKey,
+  getCachedMessages,
+  setCachedMessages,
+  fetchChannelMessages,
+  fetchDmMessages,
+  resolveSenderName,
+  prefetchChannelMessages,
+} from '../utils/meetingMessages.js';
 
 const EMOJI_LIST = [
   '😀','😂','😊','😍','🤔','😅','🥳','😎','🙁','😡',
@@ -65,7 +75,7 @@ function MessageContent({ content }) {
     <>
       {parts.map((part, i) =>
         part.startsWith('@') ? (
-          <span key={i} style={{ color:'#06b6d4', background:'rgba(6,182,212,0.12)', borderRadius:'4px', padding:'0 3px', fontWeight:600 }}>{part}</span>
+          <span key={i} style={{ color:'var(--c-accent)', background:'rgba(6,182,212,0.12)', borderRadius:'4px', padding:'0 3px', fontWeight:600 }}>{part}</span>
         ) : part
       )}
     </>
@@ -77,6 +87,7 @@ function MessageContent({ content }) {
 ═══════════════════════════════════════════════════════════════════════════ */
 function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveChannelId, members = [] }) {
   const [messages,      setMessages]      = useState([]);
+  const [ready,         setReady]         = useState(false);
   const [input,         setInput]         = useState('');
   const [showEmoji,     setShowEmoji]     = useState(false);
   const [error,         setError]         = useState('');
@@ -89,17 +100,35 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
   const endRef   = useRef(null);
   const inputRef = useRef(null);
 
-  const loadMessages = useCallback(async () => {
-    if (!projectId) return;
-    const qs = new URLSearchParams({ per_page: '100', page: '1' });
-    if (activeChannelId) qs.set('channel_id', String(activeChannelId));
-    const res = await fetch(`${API}/api/messages/project/${projectId}?${qs}`, { headers: authJsonHeaders() });
-    if (!res.ok) return;
-    const data = await res.json();
-    setMessages(data.messages || []);
+  useEffect(() => {
+    if (!projectId) return undefined;
+    const key = channelCacheKey(projectId, activeChannelId);
+    const cached = getCachedMessages(key);
+    if (cached) {
+      setMessages(cached);
+      setReady(true);
+    } else {
+      setMessages([]);
+      setReady(false);
+    }
+
+    const controller = new AbortController();
+    fetchChannelMessages(projectId, activeChannelId, controller.signal)
+      .then((msgs) => {
+        if (controller.signal.aborted) return;
+        setCachedMessages(key, msgs);
+        setMessages(msgs);
+        setReady(true);
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        if (!cached) setMessages([]);
+        setReady(true);
+      });
+
+    return () => controller.abort();
   }, [projectId, activeChannelId]);
 
-  useEffect(() => { loadMessages(); }, [loadMessages]);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   useEffect(() => {
@@ -112,7 +141,12 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
       const p = payload.channel_id == null ? null : Number(payload.channel_id);
       const a = activeChannelId == null ? null : Number(activeChannelId);
       if (p !== a) return;
-      setMessages(prev => prev.some(m => m.id === payload.id) ? prev : [...prev, payload]);
+      setMessages(prev => {
+        if (prev.some(m => m.id === payload.id)) return prev;
+        const next = [...prev, payload];
+        setCachedMessages(channelCacheKey(projectId, activeChannelId), next);
+        return next;
+      });
     };
     const onErr = (p) => { if (p?.message) setError(String(p.message)); };
     s.on('new_message', onNew);
@@ -183,7 +217,11 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
       method: 'POST', headers: authJsonHeaders(),
       body: JSON.stringify({ content: text, channel_id: activeChannelId || undefined, mention_user_ids: mentionIds }),
     }).then(r => r.json()).then(d => {
-      if (d.id) setMessages(prev => [...prev, d]);
+      if (d.id) setMessages(prev => {
+        const next = [...prev, d];
+        setCachedMessages(channelCacheKey(projectId, activeChannelId), next);
+        return next;
+      });
       else setError(d.error || 'Erreur envoi');
     }).catch(() => setError('Erreur réseau'));
   };
@@ -192,9 +230,13 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
 
   return (
     <div style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0 }}>
-      {messages.length === 0
-        ? <MeetingMascotte />
-        : (
+      {!ready ? (
+        <div className="meeting-loading">
+          <div className="meeting-loading-spinner" />
+        </div>
+      ) : messages.length === 0 ? (
+        <MeetingMascotte />
+      ) : (
           <>
             <div className="current-channel">
               <Hash size={18} />
@@ -202,9 +244,8 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
             </div>
             <div className="messages-area">
               {messages.map(msg => {
-                console.log("CHANNEL msg:", msg.id, msg.created_at);
                 const sid = msg.sender?.id ?? msg.sender_id;
-                const name = msg.sender?.name || 'Membre';
+                const name = resolveSenderName(msg, user, members);
                 const own = Number(sid) === Number(user?.id);
                 return (
                   <div key={msg.id} className={`meeting-message ${own ? 'own' : ''}`}>
@@ -224,12 +265,11 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
           </>
         )}
 
-      {error && <div style={{ padding:'0 20px 8px', fontSize:'12px', color:'#f87171' }}>{error}</div>}
+      {error && <div style={{ padding:'0 20px 8px', fontSize:'12px', color:'var(--c-danger)' }}>{error}</div>}
 
       <div className="meeting-input-area" style={{ position:'relative' }}>
-        {/* Emoji picker */}
         {showEmoji && (
-          <div style={{ position:'absolute', bottom:'72px', left:'20px', background:'rgba(2,6,23,0.98)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:'12px', padding:'10px', zIndex:200, display:'grid', gridTemplateColumns:'repeat(10,1fr)', gap:'4px', boxShadow:'0 8px 32px rgba(0,0,0,0.7)' }}>
+          <div className="meeting-popup" style={{ display:'grid', gridTemplateColumns:'repeat(10,1fr)', gap:'4px' }}>
             {EMOJI_LIST.map(e => (
               <button key={e} type="button"
                 onClick={() => { setInput(p => p + e); setShowEmoji(false); inputRef.current?.focus(); }}
@@ -241,16 +281,15 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
           </div>
         )}
 
-        {/* @mention dropdown */}
         {mentionOpen && mentionSuggestions.length > 0 && (
-          <div style={{ position:'absolute', bottom:'72px', left:'20px', background:'rgba(2,6,23,0.98)', border:'1px solid rgba(6,182,212,0.3)', borderRadius:'10px', padding:'6px', zIndex:300, minWidth:'180px', boxShadow:'0 8px 24px rgba(0,0,0,0.7)' }}>
+          <div className="meeting-mention-popup">
             {mentionSuggestions.map((m, i) => (
               <button key={m.id} type="button"
                 onMouseDown={(e) => { e.preventDefault(); insertMention(m); }}
-                style={{ display:'flex', alignItems:'center', gap:'8px', width:'100%', padding:'7px 10px', borderRadius:'7px', border:'none', background: i === mentionIdx ? 'rgba(6,182,212,0.15)' : 'none', cursor:'pointer', color:'var(--c-text2)', fontSize:'13px', textAlign:'left' }}
+                style={{ display:'flex', alignItems:'center', gap:'8px', width:'100%', padding:'7px 10px', borderRadius:'7px', border:'none', background: i === mentionIdx ? 'var(--c-hover)' : 'transparent', cursor:'pointer', color:'var(--c-text2)', fontSize:'13px', textAlign:'left' }}
                 onMouseEnter={() => setMentionIdx(i)}
               >
-                <div style={{ width:'24px', height:'24px', borderRadius:'50%', background:'linear-gradient(135deg,#06b6d4,#8b5cf6)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'11px', fontWeight:'700', flexShrink:0 }}>
+                <div className="dm-avatar" style={{ width:'24px', height:'24px', fontSize:'11px' }}>
                   {avatar(m.name || m.email)}
                 </div>
                 <span>{m.name || m.email}</span>
@@ -260,7 +299,7 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
         )}
 
         <div className="meeting-input-wrapper">
-          <button type="button" onClick={() => setShowEmoji(v => !v)} style={{ background:'none', border:'none', cursor:'pointer', color: showEmoji ? '#06b6d4' : 'var(--c-text5)', padding:'0 4px', display:'flex', alignItems:'center' }} title="Emoji">
+          <button type="button" onClick={() => setShowEmoji(v => !v)} style={{ background:'none', border:'none', cursor:'pointer', color: showEmoji ? 'var(--c-accent)' : 'var(--c-text5)', padding:'0 4px', display:'flex', alignItems:'center' }} title="Emoji">
             <Smile size={18} />
           </button>
           <input ref={inputRef} type="text" value={input}
@@ -282,24 +321,42 @@ function ChannelPanel({ projectId, user, channels, activeChannelId, setActiveCha
 ═══════════════════════════════════════════════════════════════════════════ */
 function DMPanel({ user, target, onClose }) {
   const [messages,  setMessages]  = useState([]);
+  const [ready,     setReady]     = useState(false);
   const [input,     setInput]     = useState('');
-  const [loading,   setLoading]   = useState(true);
   const [showEmoji, setShowEmoji] = useState(false);
   const [error,     setError]     = useState('');
   const endRef   = useRef(null);
   const inputRef = useRef(null);
 
-  /* load history */
-  const loadMessages = useCallback(async () => {
-    if (!target?.id) return;
-    setLoading(true);
-    const res = await fetch(`${API}/api/messages/dm/${target.id}`, { headers: authJsonHeaders() });
-    const data = res.ok ? await res.json() : {};
-    setMessages(data.messages || []);
-    setLoading(false);
-  }, [target?.id]);
+  useEffect(() => {
+    if (!target?.id || !user?.id) return undefined;
+    const key = dmCacheKey(user.id, target.id);
+    const cached = getCachedMessages(key);
+    if (cached) {
+      setMessages(cached);
+      setReady(true);
+    } else {
+      setMessages([]);
+      setReady(false);
+    }
 
-  useEffect(() => { loadMessages(); }, [loadMessages]);
+    const controller = new AbortController();
+    fetchDmMessages(target.id, controller.signal)
+      .then((msgs) => {
+        if (controller.signal.aborted) return;
+        setCachedMessages(key, msgs);
+        setMessages(msgs);
+        setReady(true);
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        if (!cached) setMessages([]);
+        setReady(true);
+      });
+
+    return () => controller.abort();
+  }, [target?.id, user?.id]);
+
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   /* real-time */
@@ -312,7 +369,12 @@ function DMPanel({ user, target, onClose }) {
       const otherId = Number(target.id);
       // Accept only messages from this conversation (me ↔ target)
       if (sid !== meId && sid !== otherId) return;
-      setMessages(prev => prev.some(m => m.id === payload.id) ? prev : [...prev, payload]);
+      setMessages(prev => {
+        if (prev.some(m => m.id === payload.id)) return prev;
+        const next = [...prev, payload];
+        setCachedMessages(dmCacheKey(user.id, target.id), next);
+        return next;
+      });
     };
     s.on('new_dm_message', onDM);
     return () => s.off('new_dm_message', onDM);
@@ -335,7 +397,11 @@ function DMPanel({ user, target, onClose }) {
       body: JSON.stringify({ content: text }),
     });
     const data = await res.json().catch(() => ({}));
-    if (res.ok && data.id) setMessages(prev => [...prev, data]);
+    if (res.ok && data.id) setMessages(prev => {
+      const next = [...prev, data];
+      setCachedMessages(dmCacheKey(user.id, target.id), next);
+      return next;
+    });
     else setError(data.error || 'Erreur envoi');
   };
 
@@ -351,7 +417,7 @@ function DMPanel({ user, target, onClose }) {
         >
           <ChevronRight size={16} style={{ transform:'rotate(180deg)' }} />
         </button>
-        <div style={{ width:'34px', height:'34px', borderRadius:'50%', background:'linear-gradient(135deg,#06b6d4,#8b5cf6)', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:'700', fontSize:'14px', flexShrink:0 }}>
+        <div className="dm-avatar">
           {avatar(target.name || target.email)}
         </div>
         <div>
@@ -361,18 +427,17 @@ function DMPanel({ user, target, onClose }) {
       </div>
 
       {/* Messages */}
-      {loading ? (
-        <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ width:'28px', height:'28px', border:'3px solid rgba(6,182,212,0.2)', borderTopColor:'#06b6d4', borderRadius:'50%', animation:'spin 1s linear infinite' }} />
+      { !ready ? (
+        <div className="meeting-loading">
+          <div className="meeting-loading-spinner" />
         </div>
       ) : messages.length === 0 ? (
         <MeetingMascotte label={`Commencez à discuter avec ${target.name || target.email} !`} />
       ) : (
         <div className="messages-area">
           {messages.map(msg => {
-            console.log("DM msg:", msg.id, msg.created_at);
             const sid = msg.sender?.id ?? msg.sender_id;
-            const name = msg.sender?.name || (Number(sid) === Number(target.id) ? (target.name || target.email) : 'Moi');
+            const name = resolveSenderName(msg, user, [], target);
             const own = Number(sid) === Number(user?.id);
             return (
               <div key={msg.id} className={`meeting-message ${own ? 'own' : ''}`}>
@@ -382,7 +447,7 @@ function DMPanel({ user, target, onClose }) {
                     <span className="message-user">{own ? (user?.name || 'Moi') : name}</span>
                     <span className="message-time">{timeLabel(msg.created_at)}</span>
                   </div>
-                  <p className="message-text" style={own ? { background:'rgba(6,182,212,0.2)', borderRadius:'12px', borderTopRightRadius:'4px' } : {}}>{msg.content}</p>
+                  <p className="message-text">{msg.content}</p>
                 </div>
               </div>
             );
@@ -391,11 +456,11 @@ function DMPanel({ user, target, onClose }) {
         </div>
       )}
 
-      {error && <div style={{ padding:'0 20px 8px', fontSize:'12px', color:'#f87171' }}>{error}</div>}
+      {error && <div style={{ padding:'0 20px 8px', fontSize:'12px', color:'var(--c-danger)' }}>{error}</div>}
 
       <div className="meeting-input-area" style={{ position:'relative' }}>
         {showEmoji && (
-          <div style={{ position:'absolute', bottom:'72px', left:'20px', background:'rgba(2,6,23,0.98)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:'12px', padding:'10px', zIndex:200, display:'grid', gridTemplateColumns:'repeat(10,1fr)', gap:'4px', boxShadow:'0 8px 32px rgba(0,0,0,0.7)' }}>
+          <div className="meeting-popup" style={{ display:'grid', gridTemplateColumns:'repeat(10,1fr)', gap:'4px' }}>
             {EMOJI_LIST.map(e => (
               <button key={e} type="button"
                 onClick={() => { setInput(p => p + e); setShowEmoji(false); inputRef.current?.focus(); }}
@@ -407,7 +472,7 @@ function DMPanel({ user, target, onClose }) {
           </div>
         )}
         <div className="meeting-input-wrapper">
-          <button type="button" onClick={() => setShowEmoji(v => !v)} style={{ background:'none', border:'none', cursor:'pointer', color: showEmoji ? '#06b6d4' : 'var(--c-text5)', padding:'0 4px', display:'flex', alignItems:'center' }} title="Emoji">
+          <button type="button" onClick={() => setShowEmoji(v => !v)} style={{ background:'none', border:'none', cursor:'pointer', color: showEmoji ? 'var(--c-accent)' : 'var(--c-text5)', padding:'0 4px', display:'flex', alignItems:'center' }} title="Emoji">
             <Smile size={18} />
           </button>
           <input ref={inputRef} type="text" value={input}
@@ -503,10 +568,12 @@ export default function MeetingView({ projectId, user, members = [], isAdmin = f
     const data = await res.json();
     const list = data.channels || [];
     setChannels(list);
-    if (list.length > 0)
+    if (list.length > 0) {
       setActiveChannelId(prev => (prev && list.some(c => c.id === prev) ? prev : list[0].id));
-    else
+      list.forEach((c) => prefetchChannelMessages(projectId, c.id));
+    } else {
       setActiveChannelId(null);
+    }
   }, [projectId]);
 
   useEffect(() => { loadChannels(); }, [loadChannels]);
@@ -602,77 +669,11 @@ export default function MeetingView({ projectId, user, members = [], isAdmin = f
 
   return (
     <div className="meeting-container">
-      <style>{`
-        .meeting-container{display:flex;flex-direction:column;height:100%;background:linear-gradient(180deg,#030a1f 0%,#020617 100%)}
-        .meeting-header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.08);background:rgba(2,6,23,0.8);backdrop-filter:blur(10px)}
-        .meeting-title{display:flex;align-items:center;gap:12px}
-        .meeting-title h2{font-size:18px;font-weight:600;color:#fff;margin:0}
-        .channel-info{display:flex;align-items:center;gap:8px;color:var(--c-text4);font-size:13px}
-        .channel-info .dot{width:8px;height:8px;border-radius:50%;background:#22c55e}
-        .meeting-actions{display:flex;gap:8px}
-        .meeting-action-btn{width:36px;height:36px;border-radius:8px;background:var(--c-hover);border:1px solid var(--c-border2);color:var(--c-text4);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s}
-        .meeting-action-btn:hover{background:var(--c-border2);color:#fff}
-        .meeting-action-btn.active{background:rgba(6,182,212,0.2);color:#06b6d4}
-        .meeting-content{display:flex;flex:1;min-height:0}
-        .meeting-sidebar{width:260px;background:rgba(2,6,23,0.5);border-right:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;backdrop-filter:blur(10px);overflow:hidden}
-        .sidebar-tabs{display:flex;border-bottom:1px solid rgba(255,255,255,0.08)}
-        .sidebar-tab{flex:1;padding:10px 0;background:none;border:none;font-size:12px;font-weight:600;cursor:pointer;color:var(--c-text5);text-transform:uppercase;letter-spacing:0.06em;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:5px}
-        .sidebar-tab.active{color:#06b6d4;border-bottom:2px solid #06b6d4}
-        .sidebar-tab:hover:not(.active){color:var(--c-text3)}
-        .agenda-section{padding:14px;border-bottom:1px solid rgba(255,255,255,0.08)}
-        .agenda-title{display:flex;align-items:center;gap:8px;color:#06b6d4;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
-        .agenda-item{padding:10px;background:rgba(255,255,255,0.03);border:1px solid var(--c-hover);border-radius:8px;margin-bottom:6px}
-        .agenda-item-title{font-size:12px;color:var(--c-text2);font-weight:500;margin-bottom:3px}
-        .agenda-item-time{font-size:11px;color:var(--c-text4)}
-        .channels-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;color:var(--c-text4);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px}
-        .channels-list{flex:1;overflow-y:auto;padding:0 6px 8px}
-        .channel-btn{width:100%;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;background:transparent;border:none;color:var(--c-text3);font-size:13px;cursor:pointer;transition:all 0.2s;text-align:left}
-        .channel-btn:hover{background:var(--c-hover);color:var(--c-text2)}
-        .channel-btn.active{background:rgba(6,182,212,0.15);color:#06b6d4}
-        .dm-search{margin:8px 10px;display:flex;align-items:center;gap:6px;background:var(--c-hover);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:6px 10px}
-        .dm-search input{background:none;border:none;color:var(--c-text2);font-size:13px;flex:1;outline:none}
-        .dm-search input::placeholder{color:var(--c-text5)}
-        .dm-contact{width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;background:none;border:none;cursor:pointer;transition:all 0.2s;border-radius:8px;margin:0 2px;text-align:left}
-        .dm-contact:hover{background:var(--c-hover)}
-        .dm-contact.active{background:rgba(6,182,212,0.15)}
-        .dm-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#06b6d4,#8b5cf6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;flex-shrink:0}
-        .meeting-main{flex:1;display:flex;flex-direction:column;min-width:0}
-        .current-channel{display:flex;align-items:center;gap:8px;padding:12px 20px;border-bottom:1px solid var(--c-hover);font-size:15px;font-weight:600;color:var(--c-text2)}
-        .messages-area{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:16px}
-        .meeting-message{display:flex;gap:12px}
-        .meeting-message.own{flex-direction:row-reverse}
-        .message-avatar{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,#06b6d4,#8b5cf6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:600;flex-shrink:0}
-        .message-content{max-width:70%}
-        .meeting-message.own .message-content{text-align:right}
-        .message-header{display:flex;align-items:center;gap:8px;margin-bottom:4px}
-        .meeting-message.own .message-header{flex-direction:row-reverse}
-        .message-user{font-size:13px;font-weight:600;color:var(--c-text2)}
-        .message-time{font-size:11px;color:var(--c-text5)}
-        .message-text{padding:10px 14px;background:var(--c-hover);border-radius:12px;border-top-left-radius:4px;font-size:14px;color:var(--c-text2);line-height:1.5;margin:0}
-        .meeting-message.own .message-text{background:rgba(6,182,212,0.15);border-radius:12px;border-top-right-radius:4px}
-        .meeting-input-area{padding:16px 20px;border-top:1px solid var(--c-hover)}
-        .meeting-input-wrapper{display:flex;gap:12px;background:var(--c-hover);border:1px solid var(--c-border2);border-radius:12px;padding:8px 12px}
-        .meeting-input{flex:1;background:transparent;border:none;color:#fff;font-size:14px;outline:none}
-        .meeting-input::placeholder{color:var(--c-text5)}
-        .meeting-send-btn{width:32px;height:32px;border-radius:8px;background:rgba(6,182,212,0.2);border:none;color:#06b6d4;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s}
-        .meeting-send-btn:hover{background:rgba(6,182,212,0.4)}
-        .members-panel{width:220px;background:rgba(2,6,23,0.5);border-left:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(10px)}
-        .members-header{display:flex;align-items:center;gap:8px;padding:14px;color:var(--c-text4);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--c-hover)}
-        .members-list{padding:6px}
-        .member-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;transition:background 0.2s}
-        .member-item:hover{background:var(--c-hover)}
-        .member-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#06b6d4,#8b5cf6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600;position:relative;flex-shrink:0}
-        .status-dot-small{position:absolute;bottom:0;right:0;width:8px;height:8px;border-radius:50%;border:2px solid #020617}
-        .status-dot-small.online{background:#22c55e}
-        .status-dot-small.offline{background:#6b7280}
-        .member-name{font-size:12px;color:var(--c-text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        @keyframes spin{to{transform:rotate(360deg)}}
-      `}</style>
 
       {/* ── HEADER ── */}
       <div className="meeting-header">
         <div className="meeting-title">
-          <MessageCircle size={22} color="#06b6d4" />
+          <MessageCircle size={22} color="var(--c-accent)" />
           <h2>Salle de réunion</h2>
           <div className="channel-info">
             {sidebarMode === 'channels'
@@ -712,7 +713,7 @@ export default function MeetingView({ projectId, user, members = [], isAdmin = f
             >
               <MessageSquare size={13} /> DM
               {totalUnread > 0 && (
-                <span style={{ position:'absolute', top:'6px', right:'12px', background:'#ef4444', color:'#fff', borderRadius:'9999px', fontSize:'10px', fontWeight:'700', padding:'1px 5px', lineHeight:'14px' }}>
+                <span style={{ position:'absolute', top:'6px', right:'12px', background:'var(--c-danger)', color:'#fff', borderRadius:'9999px', fontSize:'10px', fontWeight:'700', padding:'1px 5px', lineHeight:'14px' }}>
                   {totalUnread}
                 </span>
               )}
@@ -760,7 +761,7 @@ export default function MeetingView({ projectId, user, members = [], isAdmin = f
                             placeholder="Point de l'ordre du jour"
                             style={{ flex:1, background:'var(--c-surface)', border:'1px solid var(--c-border2)', borderRadius:'6px', padding:'5px 8px', color:'var(--c-text)', fontSize:'12px', outline:'none' }}
                           />
-                          <button onClick={() => removeAgendaItem(idx)} style={{ background:'none', border:'none', cursor:'pointer', color:'#f87171', padding:'4px', display:'flex' }}>
+                          <button onClick={() => removeAgendaItem(idx)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--c-danger)', padding:'4px', display:'flex' }}>
                             <X size={13} />
                           </button>
                         </div>
@@ -773,12 +774,12 @@ export default function MeetingView({ projectId, user, members = [], isAdmin = f
                       </div>
                     ))}
                     <button onClick={addAgendaItem}
-                      style={{ display:'flex', alignItems:'center', gap:'5px', padding:'6px 8px', borderRadius:'7px', border:'1px dashed rgba(6,182,212,0.4)', background:'none', color:'#06b6d4', fontSize:'12px', cursor:'pointer', justifyContent:'center' }}>
+                      style={{ display:'flex', alignItems:'center', gap:'5px', padding:'6px 8px', borderRadius:'7px', border:'1px dashed var(--c-border2)', background:'none', color:'var(--c-accent)', fontSize:'12px', cursor:'pointer', justifyContent:'center' }}>
                       <Plus size={12} /> Ajouter un point
                     </button>
                     <div style={{ display:'flex', gap:'6px' }}>
                       <button onClick={saveAgendaEdit}
-                        style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', padding:'6px', borderRadius:'7px', border:'none', background:'#06b6d4', color:'#000', fontSize:'12px', fontWeight:'600', cursor:'pointer' }}>
+                        style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', padding:'6px', borderRadius:'7px', border:'none', background:'var(--c-accent)', color:'#fff', fontSize:'12px', fontWeight:'600', cursor:'pointer' }}>
                         <Check size={12} /> Enregistrer
                       </button>
                       <button onClick={cancelEditAgenda}
@@ -798,7 +799,7 @@ export default function MeetingView({ projectId, user, members = [], isAdmin = f
                   : channels.map(c => (
                     <div key={c.id} style={{ display:'flex', alignItems:'center', borderRadius:'6px', overflow:'hidden', background: activeChannelId === c.id ? 'rgba(6,182,212,0.15)' : 'transparent' }}>
                       <button
-                        style={{ flex:'1 1 0', minWidth:0, display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', background:'transparent', border:'none', color: activeChannelId === c.id ? '#06b6d4' : 'var(--c-text3)', fontSize:'13px', cursor:'pointer', textAlign:'left', overflow:'hidden' }}
+                        style={{ flex:'1 1 0', minWidth:0, display:'flex', alignItems:'center', gap:'8px', padding:'8px 10px', background:'transparent', border:'none', color: activeChannelId === c.id ? 'var(--c-accent)' : 'var(--c-text3)', fontSize:'13px', cursor:'pointer', textAlign:'left', overflow:'hidden' }}
                         onClick={() => setActiveChannelId(c.id)}
                       >
                         <Hash size={15} style={{ flexShrink:0 }} />
@@ -810,7 +811,7 @@ export default function MeetingView({ projectId, user, members = [], isAdmin = f
                           disabled={deletingChanId === c.id}
                           title={`Supprimer #${c.name}`}
                           style={{ padding:'4px 7px', background:'none', border:'none', cursor: deletingChanId === c.id ? 'not-allowed' : 'pointer', color:'var(--c-text5)', flexShrink:0, display:'flex', alignItems:'center', borderRadius:'4px', opacity: deletingChanId === c.id ? 0.3 : 0.7 }}
-                          onMouseEnter={e => { if (deletingChanId !== c.id) e.currentTarget.style.color='#f87171'; }}
+                          onMouseEnter={e => { if (deletingChanId !== c.id) e.currentTarget.style.color='var(--c-danger)'; }}
                           onMouseLeave={e => e.currentTarget.style.color='var(--c-text5)'}
                         >
                           <Trash2 size={12} />
@@ -853,12 +854,12 @@ export default function MeetingView({ projectId, user, members = [], isAdmin = f
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:'13px', color:'var(--c-text2)', fontWeight:'500', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.name || m.email}</div>
-                      <div style={{ fontSize:'11px', color: onlineUsers.has(Number(m.id)) ? '#22c55e' : 'var(--c-text5)' }}>
+                      <div style={{ fontSize:'11px', color: onlineUsers.has(Number(m.id)) ? 'var(--c-success)' : 'var(--c-text5)' }}>
                         {onlineUsers.has(Number(m.id)) ? 'En ligne' : (m.role || 'Membre')}
                       </div>
                     </div>
                     {dmUnread[m.id] > 0 && (
-                      <span style={{ background:'#ef4444', color:'#fff', borderRadius:'9999px', fontSize:'10px', fontWeight:'700', padding:'1px 6px', lineHeight:'14px', flexShrink:0 }}>
+                      <span style={{ background:'var(--c-danger)', color:'#fff', borderRadius:'9999px', fontSize:'10px', fontWeight:'700', padding:'1px 6px', lineHeight:'14px', flexShrink:0 }}>
                         {dmUnread[m.id]}
                       </span>
                     )}
@@ -884,8 +885,8 @@ export default function MeetingView({ projectId, user, members = [], isAdmin = f
 
           {sidebarMode === 'dm' && !dmTarget && (
             <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px', gap:'16px' }}>
-              <div style={{ width:'64px', height:'64px', borderRadius:'50%', background:'rgba(6,182,212,0.1)', border:'1px solid rgba(6,182,212,0.25)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <MessageSquare size={28} style={{ color:'#06b6d4' }} />
+              <div style={{ width:'64px', height:'64px', borderRadius:'50%', background:'var(--c-hover)', border:'1px solid var(--c-border2)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <MessageSquare size={28} style={{ color:'var(--c-accent)' }} />
               </div>
               <p style={{ fontSize:'15px', fontWeight:'600', color:'var(--c-text2)', margin:0 }}>Messages directs</p>
               <p style={{ fontSize:'13px', color:'var(--c-text4)', textAlign:'center', maxWidth:'260px', margin:0, lineHeight:'1.5' }}>
@@ -938,7 +939,7 @@ export default function MeetingView({ projectId, user, members = [], isAdmin = f
                 {/* En ligne */}
                 {onlineList.length > 0 && (
                   <>
-                    <div style={{ padding:'6px 10px 2px', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'#22c55e', opacity:0.8 }}>
+                    <div style={{ padding:'6px 10px 2px', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--c-success)', opacity:0.8 }}>
                       En ligne — {onlineList.length}
                     </div>
                     {onlineList.map(renderMember)}

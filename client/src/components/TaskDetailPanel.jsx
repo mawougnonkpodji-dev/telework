@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, MessageSquare, Send, Clock, User, Calendar, Tag, AlertCircle } from 'lucide-react';
 import { fetchTaskById, addTaskComment } from '../services/backendApi.js';
+import { getInProgressStatus, getDeadlineUrgency } from '../utils/deadlineColors.js';
 
 /* ── helpers ─────────────────────────────────────────────────── */
 
@@ -114,8 +115,13 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
   };
 
   const t = detail || task;
-  const status = STATUS_LABELS[t?.status] || { label: t?.status, color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' };
+  const status = t?.status === 'in_progress'
+    ? getInProgressStatus(t)
+    : (STATUS_LABELS[t?.status] || { label: t?.status, color: 'var(--c-text4)', bg: 'var(--c-hover)' });
   const priority = PRIORITY_LABELS[t?.priority] || null;
+  const deadlineUrgency = (t?.status === 'in_progress' && (t?.deadline || t?.due_date))
+    ? getDeadlineUrgency(t)
+    : null;
 
   return (
     <>
@@ -135,19 +141,19 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0,
         width: 'min(480px, 100vw)',
-        background: 'linear-gradient(180deg, #111827 0%, #0f172a 100%)',
-        borderLeft: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: '-20px 0 60px rgba(0,0,0,0.5)',
+        background: 'var(--c-surface)',
+        borderLeft: '1px solid var(--c-border2)',
+        boxShadow: '-20px 0 60px rgba(0,0,0,0.18)',
         zIndex: 1101,
         display: 'flex', flexDirection: 'column',
         transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
-        transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), background 0.22s ease',
       }}>
 
         {/* ── Header ── */}
         <div style={{
           padding: '20px 24px',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: '1px solid var(--c-border3)',
           display: 'flex', alignItems: 'flex-start', gap: '12px',
           flexShrink: 0,
         }}>
@@ -174,7 +180,7 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
             </div>
             <h2 style={{
               margin: 0, fontSize: '17px', fontWeight: '700',
-              color: '#f1f5f9', lineHeight: '1.4',
+              color: 'var(--c-text)', lineHeight: '1.4',
               overflow: 'hidden', textOverflow: 'ellipsis',
               display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
             }}>
@@ -184,8 +190,8 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
           <button
             onClick={onClose}
             style={{
-              width: '32px', height: '32px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)',
-              background: 'rgba(255,255,255,0.05)', color: '#94a3b8',
+              width: '32px', height: '32px', borderRadius: '8px', border: '1px solid var(--c-border2)',
+              background: 'var(--c-hover)', color: 'var(--c-text4)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer', flexShrink: 0,
             }}
@@ -198,7 +204,7 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
         {(t?.assignee_name || t?.deadline || t?.due_date) && (
           <div style={{
             padding: '14px 24px',
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
+            borderBottom: '1px solid var(--c-border3)',
             display: 'flex', gap: '20px', flexWrap: 'wrap',
             flexShrink: 0,
           }}>
@@ -212,11 +218,15 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
                 }}>
                   {(t.assignee_name || 'N').charAt(0).toUpperCase()}
                 </div>
-                <span style={{ fontSize: '13px', color: '#94a3b8' }}>{t.assignee_name}</span>
+                <span style={{ fontSize: '13px', color: 'var(--c-text3)' }}>{t.assignee_name}</span>
               </div>
             )}
             {(t?.deadline || t?.due_date) && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '13px' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                color: deadlineUrgency?.isOverdue ? deadlineUrgency.color : 'var(--c-text4)',
+                fontSize: '13px', fontWeight: deadlineUrgency?.isOverdue ? '600' : '400',
+              }}>
                 <Calendar size={13} />
                 <span>{formatDeadline(t.deadline || t.due_date)}</span>
               </div>
@@ -228,24 +238,24 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
 
           {loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#475569', fontSize: '14px' }}>
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--c-text4)', fontSize: '14px' }}>
               Chargement…
             </div>
           ) : (
             <>
               {/* Description */}
               {t?.description?.trim() && (
-                <div style={{ padding: '20px 24px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--c-border3)' }}>
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: '6px',
-                    marginBottom: '10px', color: '#64748b', fontSize: '11px',
+                    marginBottom: '10px', color: 'var(--c-text4)', fontSize: '11px',
                     fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em',
                   }}>
                     <Tag size={11} />
                     Description
                   </div>
                   <p style={{
-                    margin: 0, fontSize: '14px', color: '#94a3b8',
+                    margin: 0, fontSize: '14px', color: 'var(--c-text3)',
                     lineHeight: '1.65', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                   }}>
                     {t.description}
@@ -261,7 +271,7 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
                 }}>
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: '7px',
-                    color: '#64748b', fontSize: '11px',
+                    color: 'var(--c-text4)', fontSize: '11px',
                     fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em',
                   }}>
                     <MessageSquare size={11} />
@@ -285,12 +295,12 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
                     alignItems: 'center', justifyContent: 'center',
                     padding: '32px 0', gap: '8px',
                   }}>
-                    <MessageSquare size={28} style={{ color: '#1e293b' }} />
-                    <p style={{ margin: 0, fontSize: '13px', color: '#334155', textAlign: 'center' }}>
+                    <MessageSquare size={28} style={{ color: 'var(--c-text5)' }} />
+                    <p style={{ margin: 0, fontSize: '13px', color: 'var(--c-text4)', textAlign: 'center' }}>
                       Aucun commentaire pour l'instant.
                     </p>
                     {!isObservateur && (
-                      <p style={{ margin: 0, fontSize: '12px', color: '#1e293b', textAlign: 'center' }}>
+                      <p style={{ margin: 0, fontSize: '12px', color: 'var(--c-text5)', textAlign: 'center' }}>
                         Soyez le premier à commenter.
                       </p>
                     )}
@@ -322,10 +332,10 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
                           {/* bubble */}
                           <div style={{ maxWidth: '78%', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: isMe ? 'flex-end' : 'flex-start' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ fontSize: '11px', fontWeight: '600', color: isMe ? '#818cf8' : '#94a3b8' }}>
+                              <span style={{ fontSize: '11px', fontWeight: '600', color: isMe ? 'var(--c-accent)' : 'var(--c-text4)' }}>
                                 {isMe ? 'Vous' : (c.author_name || 'Inconnu')}
                               </span>
-                              <span style={{ fontSize: '10px', color: '#334155', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                              <span style={{ fontSize: '10px', color: 'var(--c-text5)', display: 'flex', alignItems: 'center', gap: '3px' }}>
                                 <Clock size={9} />
                                 {timeAgo(c.created_at)}
                               </span>
@@ -333,9 +343,9 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
                             <div style={{
                               padding: '10px 13px',
                               borderRadius: isMe ? '14px 4px 14px 14px' : '4px 14px 14px 14px',
-                              background: isMe ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.04)',
-                              border: `1px solid ${isMe ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.07)'}`,
-                              fontSize: '13px', color: '#cbd5e1',
+                              background: isMe ? 'rgba(99,102,241,0.12)' : 'var(--c-hover)',
+                              border: `1px solid ${isMe ? 'rgba(99,102,241,0.25)' : 'var(--c-border2)'}`,
+                              fontSize: '13px', color: 'var(--c-text2)',
                               lineHeight: '1.55', wordBreak: 'break-word', whiteSpace: 'pre-wrap',
                             }}>
                               {c.content}
@@ -356,12 +366,12 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
         {!isObservateur && !loading && (
           <div style={{
             padding: '16px 24px',
-            borderTop: '1px solid rgba(255,255,255,0.07)',
-            background: 'rgba(0,0,0,0.2)',
+            borderTop: '1px solid var(--c-border3)',
+            background: 'var(--c-muted-bg)',
             flexShrink: 0,
           }}>
             {sendError && (
-              <div style={{ color: '#f87171', fontSize: '12px', marginBottom: '8px' }}>
+              <div style={{ color: 'var(--c-danger)', fontSize: '12px', marginBottom: '8px' }}>
                 {sendError}
               </div>
             )}
@@ -385,16 +395,16 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
                   placeholder="Ajouter un commentaire… (Ctrl+Entrée pour envoyer)"
                   style={{
                     width: '100%', padding: '10px 42px 10px 14px',
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.09)',
-                    borderRadius: '12px', color: '#e2e8f0',
+                    background: 'var(--c-input-bg)',
+                    border: '1px solid var(--c-input-border)',
+                    borderRadius: '12px', color: 'var(--c-text)',
                     fontSize: '13px', lineHeight: '1.5',
                     resize: 'none', outline: 'none',
                     fontFamily: 'inherit', boxSizing: 'border-box',
                     transition: 'border-color 0.2s',
                   }}
-                  onFocus={e => e.target.style.borderColor = '#6366f1'}
-                  onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.09)'}
+                  onFocus={e => e.target.style.borderColor = 'var(--c-accent)'}
+                  onBlur={e => e.target.style.borderColor = 'var(--c-input-border)'}
                 />
                 <button
                   onClick={handleSend}
@@ -402,9 +412,9 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
                   style={{
                     position: 'absolute', right: '10px', bottom: '10px',
                     width: '28px', height: '28px', borderRadius: '8px',
-                    background: newComment.trim() && !sending ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'rgba(255,255,255,0.05)',
+                    background: newComment.trim() && !sending ? 'linear-gradient(135deg, #6366f1, #8b5cf6)' : 'var(--c-hover)',
                     border: 'none',
-                    color: newComment.trim() && !sending ? '#fff' : '#334155',
+                    color: newComment.trim() && !sending ? '#fff' : 'var(--c-text5)',
                     cursor: newComment.trim() && !sending ? 'pointer' : 'not-allowed',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     transition: 'background 0.2s',
@@ -417,7 +427,7 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
                 </button>
               </div>
             </div>
-            <p style={{ margin: '6px 0 0 40px', fontSize: '10px', color: '#1e293b' }}>
+            <p style={{ margin: '6px 0 0 40px', fontSize: '10px', color: 'var(--c-text5)' }}>
               Ctrl + Entrée pour envoyer
             </p>
           </div>
@@ -426,8 +436,8 @@ export default function TaskDetailPanel({ isOpen, onClose, task, currentUser, is
         {isObservateur && !loading && (
           <div style={{
             padding: '14px 24px',
-            borderTop: '1px solid rgba(255,255,255,0.07)',
-            textAlign: 'center', fontSize: '12px', color: '#334155', flexShrink: 0,
+            borderTop: '1px solid var(--c-border3)',
+            textAlign: 'center', fontSize: '12px', color: 'var(--c-text5)', flexShrink: 0,
           }}>
             Les observateurs sont en lecture seule
           </div>

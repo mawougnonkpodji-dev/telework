@@ -16,8 +16,28 @@ import TaskNode from './TaskNode';
 import { getEdgeColorFromParent } from './graphUtils';
 import { fetchProjectTasksKanban, addTaskDependency, removeTaskDependency } from '../services/backendApi.js';
 import { flattenKanbanTasks } from '../utils/apiHelpers.js';
+import { useTheme } from '../contexts/ThemeContext.jsx';
+import { getCachedGraph, setCachedGraph, getCachedKanbanPayload, setCachedKanbanPayload } from '../utils/graphCache.js';
 
 const nodeTypes = { task: TaskNode };
+
+const PANEL_BOX = {
+  background: 'var(--c-surface)',
+  backdropFilter: 'blur(8px)',
+  padding: '16px 20px',
+  borderRadius: '12px',
+  border: '1px solid var(--c-border2)',
+  boxShadow: 'var(--shadow-sm)',
+};
+
+const CENTER_STATE = {
+  minHeight: '60vh',
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'var(--c-bg)',
+};
 
 function getLayoutedElements(nodes, edges, direction = 'LR') {
   const dagreGraph = new dagre.graphlib.Graph();
@@ -51,6 +71,7 @@ function getLayoutedElements(nodes, edges, direction = 'LR') {
 }
 
 function TaskGraphExplorer({ projectId, user }) {
+  const { resolvedTheme } = useTheme();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, defaultOnEdgesChange] = useEdgesState([]);
   const [selectedNodeId, setSelectedNodeId] = useState(null);
@@ -103,6 +124,16 @@ function TaskGraphExplorer({ projectId, user }) {
     return { nodes: layoutedNodes, edges: layoutedEdges };
   }, [canEdit, setSelectedNodeId]);
 
+  const applyPayload = useCallback((payload) => {
+    const flat = flattenKanbanTasks(payload);
+    const built = buildGraph(flat);
+    setNodes(built.nodes);
+    setEdges(built.edges);
+    setCachedGraph(projectId, built);
+    setCachedKanbanPayload(projectId, payload);
+    return built;
+  }, [projectId, buildGraph, setNodes, setEdges]);
+
   // Load from API
   const loadGraph = useCallback(async () => {
     if (!projectId) {
@@ -110,24 +141,38 @@ function TaskGraphExplorer({ projectId, user }) {
       setError(null);
       return;
     }
+
+    const cached = getCachedGraph(projectId);
+    const cachedPayload = getCachedKanbanPayload(projectId);
+
+    if (cached) {
+      setNodes(cached.nodes);
+      setEdges(cached.edges);
+      setIsLoading(false);
+    } else if (cachedPayload) {
+      applyPayload(cachedPayload);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
     try {
       setError(null);
-      const payload = await fetchProjectTasksKanban(projectId);
+      const payload = await fetchProjectTasksKanban(projectId, 200, true);
       if (payload) {
-        const flat = flattenKanbanTasks(payload);
-        const { nodes: graphNodes, edges: graphEdges } = buildGraph(flat);
-        setNodes(graphNodes);
-        setEdges(graphEdges);
+        applyPayload(payload);
         setIsLoading(false);
-      } else {
+      } else if (!cached && !cachedPayload) {
         setError('Impossible de charger les tâches du projet');
         setIsLoading(false);
       }
     } catch (err) {
-      setError('Erreur réseau ou serveur inaccessible');
-      setIsLoading(false);
+      if (!cached && !cachedPayload) {
+        setError('Erreur réseau ou serveur inaccessible');
+        setIsLoading(false);
+      }
     }
-  }, [projectId, buildGraph, setNodes, setEdges]);
+  }, [projectId, applyPayload, setNodes, setEdges]);
 
   // Initial load
   useEffect(() => {
@@ -144,13 +189,8 @@ function TaskGraphExplorer({ projectId, user }) {
   const refreshGraph = useCallback(async () => {
     if (!projectId) return;
     try {
-      const payload = await fetchProjectTasksKanban(projectId);
-      if (payload) {
-        const flat = flattenKanbanTasks(payload);
-        const { nodes: graphNodes, edges: graphEdges } = buildGraph(flat);
-        setNodes(graphNodes);
-        setEdges(graphEdges);
-      }
+      const payload = await fetchProjectTasksKanban(projectId, 200, true);
+      if (payload) applyPayload(payload);
     } catch (err) {
       console.error('Failed to refresh graph:', err);
     }
@@ -232,7 +272,7 @@ function TaskGraphExplorer({ projectId, user }) {
     setEdges(eds => {
       const filtered = eds.filter(e => e.target !== target);
       return addEdge(
-        { ...params, type: 'smoothstep', animated: true, style: { stroke: '#3b82f6', strokeWidth: 2 } },
+        { ...params, type: 'smoothstep', animated: true, style: { stroke: 'var(--c-info)', strokeWidth: 2 } },
         filtered
       );
     });
@@ -315,32 +355,24 @@ function TaskGraphExplorer({ projectId, user }) {
   // UI states
   if (isLoading) {
     return (
-      <div style={{
-        minHeight: '60vh', width: '100%',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
-      }}>
-        <div style={{ color: '#22d3ee', fontSize: '18px' }}>Chargement du graphe...</div>
+      <div style={CENTER_STATE}>
+        <div style={{ color: 'var(--c-accent)', fontSize: '18px' }}>Chargement du graphe...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div style={{
-        minHeight: '60vh', width: '100%',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
-      }}>
-        <div style={{ color: '#ef4444', fontSize: '18px', textAlign: 'center', padding: '20px' }}>
+      <div style={CENTER_STATE}>
+        <div style={{ color: 'var(--c-danger)', fontSize: '18px', textAlign: 'center', padding: '20px' }}>
           <p>{error}</p>
           <button
             onClick={loadGraph}
             style={{
               marginTop: '16px',
               padding: '8px 16px',
-              background: '#22d3ee',
-              color: 'var(--c-bg)',
+              background: 'var(--c-accent)',
+              color: '#fff',
               border: 'none',
               borderRadius: '8px',
               cursor: 'pointer',
@@ -356,21 +388,20 @@ function TaskGraphExplorer({ projectId, user }) {
 
   if (!projectId) {
     return (
-      <div style={{
-        minHeight: '60vh', width: '100%',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)'
-      }}>
+      <div style={CENTER_STATE}>
         <div style={{ color: 'var(--c-text3)', fontSize: '18px', textAlign: 'center' }}>
           <p>Aucun projet sélectionné</p>
-          <p style={{ fontSize: '14px', marginTop: '8px' }}>Sélectionnez un projet dans le kanban pour voir sa structure.</p>
+          <p style={{ fontSize: '14px', marginTop: '8px', color: 'var(--c-text4)' }}>Sélectionnez un projet dans le kanban pour voir sa structure.</p>
         </div>
       </div>
     );
   }
 
+  const gridColor = resolvedTheme === 'light' ? 'var(--c-border2)' : '#334155';
+  const minimapMask = resolvedTheme === 'light' ? 'rgba(248, 250, 252, 0.85)' : 'rgba(15, 23, 42, 0.8)';
+
   return (
-    <div style={{ height: '70vh', minHeight: '560px', width: '100%' }}>
+    <div style={{ height: '70vh', minHeight: '560px', width: '100%', background: 'var(--c-bg)', borderRadius: '16px', border: '1px solid var(--c-border2)', overflow: 'hidden' }}>
       <ReactFlow
         nodes={displayNodes}
         edges={displayEdges}
@@ -387,18 +418,14 @@ function TaskGraphExplorer({ projectId, user }) {
         edgesFocusable={canEdit}
         deleteKeyCode={canEdit ? 'Delete' : null}
       >
-        <Background color="#334155" gap={20} />
+        <Background color={gridColor} gap={20} />
         <Controls />
-        <MiniMap nodeStrokeColor="#fff" nodeColor="var(--c-surface)" nodeBorderRadius={2} maskColor="rgba(15, 23, 42, 0.8)" />
+        <MiniMap nodeStrokeColor="var(--c-border2)" nodeColor="var(--c-surface)" nodeBorderRadius={2} maskColor={minimapMask} />
 
         {/* Header with Title + Undo (only for editors) */}
         <Panel position="top-left" style={{ padding: '16px' }}>
           <div style={{
-            background: 'rgba(15, 23, 42, 0.9)',
-            backdropFilter: 'blur(8px)',
-            padding: '16px 20px',
-            borderRadius: '12px',
-            border: '1px solid rgba(255,255,255,0.1)',
+            ...PANEL_BOX,
             maxWidth: canEdit ? '420px' : '320px',
             display: 'flex',
             justifyContent: 'space-between',
@@ -421,7 +448,7 @@ function TaskGraphExplorer({ projectId, user }) {
                 title="Annuler la dernière modification"
                 style={{
                   padding: '6px 12px',
-                  background: '#f59e0b',
+                  background: 'var(--c-warning)',
                   border: 'none',
                   borderRadius: '6px',
                   color: '#fff',
@@ -442,21 +469,15 @@ function TaskGraphExplorer({ projectId, user }) {
         </Panel>
 
         <Panel position="bottom-right" style={{ padding: '16px' }}>
-          <div style={{
-            background: 'rgba(15, 23, 42, 0.9)',
-            backdropFilter: 'blur(8px)',
-            padding: '12px 16px',
-            borderRadius: '12px',
-            border: '1px solid rgba(255,255,255,0.1)'
-          }}>
+          <div style={{ ...PANEL_BOX, padding: '12px 16px' }}>
             <div style={{ color: 'var(--c-text)', fontSize: '12px', fontWeight: '700', marginBottom: '8px' }}>Légende</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--c-text3)' }}>
-                <div style={{ width: '16px', height: '2px', background: '#22d3ee' }} />
+                <div style={{ width: '16px', height: '2px', background: 'var(--c-success)' }} />
                 <span>Libre (Done)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--c-text3)' }}>
-                <div style={{ width: '16px', height: '2px', background: '#3b82f6' }} />
+                <div style={{ width: '16px', height: '2px', background: 'var(--c-info)' }} />
                 <span>En cours</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--c-text3)' }}>
@@ -464,7 +485,7 @@ function TaskGraphExplorer({ projectId, user }) {
                 <span>Théorique (non démarré)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--c-text3)' }}>
-                <div style={{ width: '16px', height: '2px', background: '#ef4444' }} />
+                <div style={{ width: '16px', height: '2px', background: 'var(--c-danger)' }} />
                 <span>Bloqué (Retard/Rejet)</span>
               </div>
             </div>
@@ -473,13 +494,7 @@ function TaskGraphExplorer({ projectId, user }) {
 
         {selectedNodeId && (
           <Panel position="top-right" style={{ padding: '16px' }}>
-            <div style={{
-              background: 'rgba(15, 23, 42, 0.9)',
-              backdropFilter: 'blur(8px)',
-              padding: '12px 16px',
-              borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.1)'
-            }}>
+            <div style={{ ...PANEL_BOX, padding: '12px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                 <span style={{ color: 'var(--c-text3)', fontSize: '12px' }}>
                   {focusNodeIds.size} tâches dans le chemin
@@ -488,8 +503,8 @@ function TaskGraphExplorer({ projectId, user }) {
                   onClick={() => setSelectedNodeId(null)}
                   style={{
                     padding: '4px 12px',
-                    background: '#334155',
-                    border: 'none',
+                    background: 'var(--c-muted-bg)',
+                    border: '1px solid var(--c-border2)',
                     borderRadius: '6px',
                     color: 'var(--c-text)',
                     fontSize: '11px',

@@ -23,7 +23,7 @@ const toastStyle = (type) => ({
   gap: '12px',
   padding: '14px 16px',
   borderRadius: '12px',
-  background: '#fff',
+  background: 'var(--c-surface)',
   boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
   border: `1px solid ${getBorderColor(type)}`,
   borderLeft: `4px solid ${getBorderColor(type)}`,
@@ -69,11 +69,11 @@ export function Toast({ toast, onClose }) {
       }}>
         {iconMap[toast.type] || iconMap.info}
         <div style={{ flex: 1 }}>
-          <p style={{ fontSize: '14px', fontWeight: '600', color: '#111827', margin: 0 }}>
+          <p style={{ fontSize: '14px', fontWeight: '600', color: 'var(--c-text)', margin: 0 }}>
             {toast.title}
           </p>
           {toast.message && (
-            <p style={{ fontSize: '12px', color: '#6b7280', margin: '2px 0 0' }}>
+            <p style={{ fontSize: '12px', color: 'var(--c-text4)', margin: '2px 0 0' }}>
               {toast.message}
             </p>
           )}
@@ -84,7 +84,7 @@ export function Toast({ toast, onClose }) {
             background: 'transparent',
             border: 'none',
             cursor: 'pointer',
-            color: '#9ca3af',
+            color: 'var(--c-text5)',
             padding: '4px'
           }}
         >

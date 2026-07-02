@@ -20,6 +20,7 @@ import {
   canManageProjectMembers,
   xpToPriority,
 } from './utils/apiHelpers.js';
+import { setCachedKanbanPayload } from './utils/graphCache.js';
 import {
   EMPTY_BOARD,
   moveTaskInBoard,
@@ -385,6 +386,7 @@ function App() {
       });
       if (taskRes.ok) {
         const tasksData = await taskRes.json();
+        setCachedKanbanPayload(projectId, tasksData);
         const board = kanbanApiToBoardShape(tasksData);
         setProjectTasks(prev => ({ ...prev, [projectId]: board }));
       } else {

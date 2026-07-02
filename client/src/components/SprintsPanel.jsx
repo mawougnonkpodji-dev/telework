@@ -29,9 +29,16 @@ function sprintStatus(sprint) {
   const now = new Date();
   const start = new Date(sprint.start_date);
   const end   = new Date(sprint.end_date);
-  if (now < start) return { label: 'À venir',   color: '#64748b', bg: 'rgba(100,116,139,0.12)' };
-  if (now > end)   return { label: 'Terminé',   color: '#22c55e', bg: 'rgba(34,197,94,0.12)' };
-  return               { label: 'En cours',  color: '#06b6d4', bg: 'rgba(6,182,212,0.12)' };
+  if (now < start) return { label: 'À venir',   color: 'var(--c-text4)', bg: 'var(--c-hover)' };
+  if (now > end)   return { label: 'Terminé',   color: 'var(--c-success)', bg: 'rgba(34,197,94,0.12)' };
+
+  const total = end - start;
+  const remaining = end - now;
+  const remainingPct = total > 0 ? (remaining / total) * 100 : 0;
+
+  if (remainingPct > 50) return { label: 'En cours', color: 'var(--c-success)', bg: 'rgba(34,197,94,0.12)' };
+  if (remainingPct > 25) return { label: 'En cours', color: 'var(--c-warning)', bg: 'rgba(245,158,11,0.12)' };
+  return { label: 'En cours', color: 'var(--c-danger)', bg: 'rgba(239,68,68,0.12)' };
 }
 
 function progressColor(pct) {
